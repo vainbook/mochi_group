@@ -105,7 +105,7 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-      display: none; /* 預設隱藏測試按鈕 */
+      display: none;
     }
 
     .dev-btn:hover {
@@ -919,7 +919,7 @@
     </div>
   </div>
 
-  <!-- Modal: DEV Profile Switcher (Hidden by default in Production) -->
+  <!-- Modal: DEV Profile Switcher -->
   <div id="modal-dev-profile" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-title">
@@ -935,7 +935,7 @@
     </div>
   </div>
 
-  <!-- Embedded Core JS App Logic -->
+  <!-- Embedded Core JS App Logic with Google Sheet Sync -->
   <script>
     /* ==========================================================================
        NATIVE LINE CHAT UI EVENT BULLETIN BOARD (CORE LOGIC)
@@ -944,6 +944,7 @@
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
       LIFF_ID: "YOUR_LIFF_ID_HERE",
+      GAS_API_URL: "YOUR_GAS_API_URL_HERE", // 貼上你的 Google Apps Script 網頁應用程式網址
       STORAGE_KEY: "line_events_v6",
       NOTICE_STORAGE_KEY: "line_top_notice_v1"
     };
@@ -973,11 +974,11 @@
     // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", async () => {
       checkDevModeVisibility();
-      loadEvents();
-      loadNotice();
+      loadLocalData();
       setupEventListeners();
       renderDevProfiles();
       await initLIFF();
+      await fetchRemoteDataFromGAS();
       renderNoticeBoard();
       renderEvents();
     });
@@ -996,8 +997,6 @@
 
     // --- 3. LIFF AUTH & USER SETUP ---
     async function initLIFF() {
-      const statusEl = document.getElementById("liff-status");
-      
       if (CONFIG.LIFF_ID && CONFIG.LIFF_ID !== "YOUR_LIFF_ID_HERE" && typeof liff !== "undefined") {
         try {
           await liff.init({ liffId: CONFIG.LIFF_ID });
@@ -1015,7 +1014,6 @@
           console.warn("LIFF init failed, using default mode:", err);
         }
       }
-      
       updateUserUI();
     }
 
@@ -1023,37 +1021,65 @@
       document.getElementById("current-name").innerText = currentUser.displayName;
     }
 
-    // --- 4. DATA PERSISTENCE (NOTICE & EVENTS) ---
-    function loadNotice() {
-      const stored = localStorage.getItem(CONFIG.NOTICE_STORAGE_KEY);
-      if (stored) {
-        try {
-          noticeData = JSON.parse(stored);
-        } catch (e) {
-          console.error("Failed to parse notice", e);
+    // --- 4. GOOGLE SHEETS / GAS API SYNC ---
+    async function fetchRemoteDataFromGAS() {
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL === "YOUR_GAS_API_URL_HERE") return;
+
+      try {
+        const res = await fetch(CONFIG.GAS_API_URL);
+        const data = await res.json();
+        
+        if (data && data.status === "success") {
+          if (data.events && Array.isArray(data.events)) {
+            eventsData = data.events;
+            saveLocalEvents();
+          }
+          if (data.notice) {
+            noticeData.currentContent = data.notice.content;
+            noticeData.lastAuthor = data.notice.author;
+            noticeData.lastTime = data.notice.timestamp;
+            noticeData.history = data.noticeHistory || noticeData.history;
+            saveLocalNotice();
+          }
         }
+      } catch (err) {
+        console.warn("Could not fetch remote GAS data, using local storage fallback:", err);
       }
     }
 
-    function saveNotice() {
+    async function sendPostToGAS(payload) {
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL === "YOUR_GAS_API_URL_HERE") return;
+
+      try {
+        await fetch(CONFIG.GAS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        console.warn("Failed sending POST to GAS:", err);
+      }
+    }
+
+    // --- 5. LOCAL PERSISTENCE FALLBACK ---
+    function loadLocalNotice() {
+      const stored = localStorage.getItem(CONFIG.NOTICE_STORAGE_KEY);
+      if (stored) {
+        try { noticeData = JSON.parse(stored); } catch (e) {}
+      }
+    }
+
+    function saveLocalNotice() {
       localStorage.setItem(CONFIG.NOTICE_STORAGE_KEY, JSON.stringify(noticeData));
     }
 
-    function renderNoticeBoard() {
-      document.getElementById("notice-text-content").innerText = noticeData.currentContent || "目前尚無公告。";
-      document.getElementById("notice-author-info").innerText = `由 ${noticeData.lastAuthor || '管理員'} 發布`;
-      document.getElementById("notice-time-info").innerText = noticeData.lastTime || "--";
-    }
-
-    function loadEvents() {
+    function loadLocalEvents() {
       const stored = localStorage.getItem(CONFIG.STORAGE_KEY);
       if (stored) {
         try {
           eventsData = JSON.parse(stored);
           return;
-        } catch (e) {
-          console.error("Failed to parse events", e);
-        }
+        } catch (e) {}
       }
 
       // Initial Seed Data with History Logs
@@ -1075,9 +1101,7 @@
           hostUser: DEV_PROFILES[0],
           createdAt: new Date().toISOString(),
           attendees: [DEV_PROFILES[0], DEV_PROFILES[1], DEV_PROFILES[2]],
-          history: [
-            { author: "小明", time: getFormattedNow(), action: "創立了此活動" }
-          ]
+          history: [{ author: "小明", time: getFormattedNow(), action: "創立了此活動" }]
         },
         {
           id: "evt_2",
@@ -1091,9 +1115,7 @@
           hostUser: DEV_PROFILES[1],
           createdAt: new Date().toISOString(),
           attendees: [DEV_PROFILES[1], DEV_PROFILES[3]],
-          history: [
-            { author: "阿傑", time: getFormattedNow(), action: "創立了此活動" }
-          ]
+          history: [{ author: "阿傑", time: getFormattedNow(), action: "創立了此活動" }]
         },
         {
           id: "evt_3",
@@ -1107,16 +1129,19 @@
           hostUser: DEV_PROFILES[2],
           createdAt: new Date().toISOString(),
           attendees: [DEV_PROFILES[2], DEV_PROFILES[0]],
-          history: [
-            { author: "小美", time: getFormattedNow(), action: "創立了此活動" }
-          ]
+          history: [{ author: "小美", time: getFormattedNow(), action: "創立了此活動" }]
         }
       ];
 
-      saveEvents();
+      saveLocalEvents();
     }
 
-    function saveEvents() {
+    function loadLocalData() {
+      loadLocalEvents();
+      loadLocalNotice();
+    }
+
+    function saveLocalEvents() {
       localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(eventsData));
     }
 
@@ -1136,7 +1161,7 @@
       return `${month}/${date} ${hour}:${min}`;
     }
 
-    // --- 5. LOCATION URL AUTO-LINK FORMATTER ---
+    // --- 6. LOCATION URL AUTO-LINK FORMATTER ---
     function formatLocationHtml(locationStr) {
       if (!locationStr) return "未指定";
       
@@ -1150,7 +1175,13 @@
       return escapeHtml(locationStr);
     }
 
-    // --- 6. RENDER EVENTS & CARDS ---
+    // --- 7. RENDER EVENTS & CARDS ---
+    function renderNoticeBoard() {
+      document.getElementById("notice-text-content").innerText = noticeData.currentContent || "目前尚無公告。";
+      document.getElementById("notice-author-info").innerText = `由 ${noticeData.lastAuthor || '管理員'} 發布`;
+      document.getElementById("notice-time-info").innerText = noticeData.lastTime || "--";
+    }
+
     function renderEvents() {
       const listEl = document.getElementById("event-list");
       listEl.innerHTML = "";
@@ -1256,7 +1287,7 @@
       });
     }
 
-    // --- 7. NOTICE BOARD HANDLERS ---
+    // --- 8. NOTICE BOARD HANDLERS ---
     document.getElementById("form-edit-notice").addEventListener("submit", (e) => {
       e.preventDefault();
       const text = document.getElementById("input-notice-text").value.trim();
@@ -1274,7 +1305,9 @@
         content: text
       });
 
-      saveNotice();
+      saveLocalNotice();
+      sendPostToGAS({ action: "updateNotice", content: text, author: currentUser.displayName });
+      
       renderNoticeBoard();
       closeModal("modal-edit-notice");
 
@@ -1290,7 +1323,7 @@
       };
     });
 
-    // --- 8. BROADCAST ALL OPEN EVENTS ---
+    // --- 9. BROADCAST ALL OPEN EVENTS ---
     function broadcastOpenEvents() {
       const openEvents = eventsData
         .filter(evt => {
@@ -1343,7 +1376,7 @@ ${pageUrl}`;
       };
     }
 
-    // --- 9. EXPORT ENDED EVENTS FUNCTION ---
+    // --- 10. EXPORT ENDED EVENTS FUNCTION ---
     function exportEndedEvents() {
       const endedEvents = eventsData
         .filter(evt => new Date(evt.datetime) < new Date())
@@ -1372,7 +1405,7 @@ ${pageUrl}`;
       });
     }
 
-    // --- 10. RSVP TOGGLE & COPIED NOTIFICATION ---
+    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
     function toggleRSVP(eventId) {
       const evt = eventsData.find(e => e.id === eventId);
       if (!evt) return;
@@ -1399,13 +1432,20 @@ ${pageUrl}`;
         evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "報名參加了活動" });
       }
 
-      saveEvents();
-      renderEvents();
+      saveLocalEvents();
+      sendPostToGAS({
+        action: "toggleRSVP",
+        eventId: evt.id,
+        userId: currentUser.userId,
+        displayName: currentUser.displayName,
+        pictureUrl: currentUser.pictureUrl
+      });
 
+      renderEvents();
       triggerAutoCopyAndAlert(evt, actionText);
     }
 
-    // --- 11. AUTO-COPY SINGLE EVENT TRIGGER ---
+    // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
     function triggerAutoCopyAndAlert(evt, actionHeadline) {
       const formattedTime = new Date(evt.datetime).toLocaleString("zh-TW", {
         month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
@@ -1437,7 +1477,7 @@ ${pageUrl}`;
       };
     }
 
-    // --- 12. EVENT CREATION ---
+    // --- 13. EVENT CREATION ---
     document.getElementById("form-create-event").addEventListener("submit", (e) => {
       e.preventDefault();
 
@@ -1461,7 +1501,9 @@ ${pageUrl}`;
       };
 
       eventsData.push(newEvent);
-      saveEvents();
+      saveLocalEvents();
+      sendPostToGAS({ action: "saveEvent", ...newEvent });
+
       renderEvents();
       closeModal("modal-create");
       document.getElementById("form-create-event").reset();
@@ -1469,7 +1511,7 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(newEvent, "創立新活動！");
     });
 
-    // --- 13. GOOGLE CALENDAR GENERATOR ---
+    // --- 14. GOOGLE CALENDAR GENERATOR ---
     function generateGoogleCalendarUrl(evt) {
       const startDt = new Date(evt.datetime);
       const endDt = new Date(startDt.getTime() + 2 * 60 * 60 * 1000);
@@ -1486,7 +1528,7 @@ ${pageUrl}`;
       return `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
     }
 
-    // --- 14. EDIT EVENT SUBMISSION LOGIC ---
+    // --- 15. EDIT EVENT SUBMISSION LOGIC ---
     document.getElementById("form-edit-event").addEventListener("submit", (e) => {
       e.preventDefault();
       
@@ -1531,7 +1573,9 @@ ${pageUrl}`;
         action: `更新了：${changes.join("、")}`
       });
 
-      saveEvents();
+      saveLocalEvents();
+      sendPostToGAS({ action: "saveEvent", ...evt });
+
       renderEvents();
       closeModal("modal-edit");
 
@@ -1540,7 +1584,7 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(evt, "編輯更新了活動內容！");
     });
 
-    // --- 15. DETAIL MODAL & @MENTION & EDIT / DELETE ---
+    // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE ---
     function openDetailModal(eventId) {
       activeEventId = eventId;
       const evt = eventsData.find(e => e.id === eventId);
@@ -1633,7 +1677,9 @@ ${mentionsText}
             time: getFormattedNow(),
             action: `修改主揪為「${newHostName}」`
           });
-          saveEvents();
+          saveLocalEvents();
+          sendPostToGAS({ action: "saveEvent", ...evt });
+
           renderEvents();
           openDetailModal(evt.id);
           alert("✅ 已更新主揪名稱！");
@@ -1643,7 +1689,7 @@ ${mentionsText}
       document.getElementById("btn-delete-event").onclick = () => {
         if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
           eventsData = eventsData.filter(e => e.id !== eventId);
-          saveEvents();
+          saveLocalEvents();
           renderEvents();
           closeModal("modal-detail");
           alert("已成功刪除活動！");
@@ -1661,7 +1707,7 @@ ${mentionsText}
       document.getElementById(id).classList.remove("active");
     }
 
-    // --- 16. DEV PROFILES ---
+    // --- 17. DEV PROFILES ---
     function renderDevProfiles() {
       const container = document.getElementById("dev-profiles-container");
       container.innerHTML = DEV_PROFILES.map(prof => `
@@ -1683,7 +1729,7 @@ ${mentionsText}
       }
     }
 
-    // --- 17. EVENT LISTENERS ---
+    // --- 18. EVENT LISTENERS ---
     function setupEventListeners() {
       document.getElementById("fab-add-event").onclick = () => {
         const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
