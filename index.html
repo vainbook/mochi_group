@@ -105,6 +105,7 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
+      display: none; /* 預設隱藏測試按鈕 */
     }
 
     .dev-btn:hover {
@@ -655,7 +656,7 @@
         <div>
           <span style="color: #64748b;">登入身份：</span>
           <span id="current-name" class="user-name">載入中...</span>
-          <span id="liff-status" style="font-size: 11px; margin-left: 4px; color: var(--line-green);">[INIT]</span>
+          <span id="liff-status" style="font-size: 11px; margin-left: 4px; color: var(--line-green); display:none;">[INIT]</span>
         </div>
         <button id="btn-dev-toggle" class="dev-btn">⚙️ 切換測試身分</button>
       </div>
@@ -918,7 +919,7 @@
     </div>
   </div>
 
-  <!-- Modal: DEV Profile Switcher -->
+  <!-- Modal: DEV Profile Switcher (Hidden by default in Production) -->
   <div id="modal-dev-profile" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-title">
@@ -971,6 +972,7 @@
 
     // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", async () => {
+      checkDevModeVisibility();
       loadEvents();
       loadNotice();
       setupEventListeners();
@@ -979,6 +981,18 @@
       renderNoticeBoard();
       renderEvents();
     });
+
+    // 檢查 URL 網址是否包含 ?dev=true ，否則隱藏測試按鈕
+    function checkDevModeVisibility() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isDevParam = urlParams.get('dev') === 'true';
+      const devBtn = document.getElementById("btn-dev-toggle");
+      if (isDevParam) {
+        devBtn.style.display = "inline-block";
+      } else {
+        devBtn.style.display = "none";
+      }
+    }
 
     // --- 3. LIFF AUTH & USER SETUP ---
     async function initLIFF() {
@@ -994,19 +1008,12 @@
               displayName: profile.displayName,
               pictureUrl: profile.pictureUrl || "https://api.dicebear.com/7.x/pixel-art/svg?seed=Default"
             };
-            statusEl.innerText = "[LIFF: OK]";
-            statusEl.style.color = "var(--line-green)";
           } else {
             liff.login();
           }
         } catch (err) {
-          console.warn("LIFF init failed, using DEV mode:", err);
-          statusEl.innerText = "[DEV MODE]";
-          statusEl.style.color = "#64748b";
+          console.warn("LIFF init failed, using default mode:", err);
         }
-      } else {
-        statusEl.innerText = "[DEV MODE]";
-        statusEl.style.color = "#64748b";
       }
       
       updateUserUI();
