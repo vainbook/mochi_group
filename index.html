@@ -766,7 +766,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-05T22:41:57+08:00">v260805.2241</time>
+          <time class="version-label" datetime="2026-08-05T23:04:07+08:00">v260805.2304</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1054,9 +1054,13 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
+      APP_VERSION: "v260805.2304",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec",
+      VERSION_MANIFEST_URL: "version.json",
+      DATA_SYNC_INTERVAL_MS: 12000,
+      VERSION_CHECK_INTERVAL_MS: 60000,
       STORAGE_KEY: "line_events_v6",
       USER_CACHE_KEY: "line_user_profile_v2"
     };
@@ -1077,6 +1081,12 @@
 
     let currentFilter = "open";
     let activeEventId = null;
+    let remoteFetchInFlight = null;
+    let versionCheckInFlight = null;
+    let pendingMutationCount = 0;
+    let localMutationRevision = 0;
+    let automaticUpdatesStarted = false;
+    let automaticUpdateDebounceTimer = null;
     const processingRSVPEventIds = new Set();
 
     // --- CROSS-PLATFORM UTILS ---
@@ -1161,6 +1171,13 @@
       const location = String(locationValue || "").trim();
       if (!location || ["線上 / 待定", "線上/待定", "線上／待定"].includes(location)) return "待定";
       return location;
+    }
+
+    function isEventDeleted(evt) {
+      return Boolean(evt && (
+        evt.deleted === true ||
+        String(evt.status || "").toLowerCase() === "deleted"
+      ));
     }
 
     function getMaxAttendees(evt) {
@@ -1289,7 +1306,7 @@
       setupInputFocusScroll();
       setupQuarterHourInputs();
 
-      initLIFF();
+      initLIFF().finally(() => setupAutomaticUpdates());
       runInitialSync();
     });
 
@@ -1305,21 +1322,100 @@
         renderEvents();
 
         if (isSuccess) {
-          updateSyncBadge("已連動", true);
+          updateSyncBadge(`已同步 ${getSyncTimeText()}`, true);
           setSyncClockPrompt("done", "已成功連動最新雲端資料");
           setTimeout(() => setSyncClockPrompt("hide"), 1200);
         } else {
           updateSyncBadge("離線資料", false);
-          setSyncClockPrompt("offline", "目前顯示本機資料，稍後重新開啟即可再同步");
+          setSyncClockPrompt("offline", "目前顯示本機資料，網路恢復後會自動同步");
           setTimeout(() => setSyncClockPrompt("hide"), 2400);
         }
       } catch (err) {
         console.warn("Initial sync warning:", err);
         updateSyncBadge("離線資料", false);
-        setSyncClockPrompt("offline", "目前顯示本機資料，稍後重新開啟即可再同步");
+        setSyncClockPrompt("offline", "目前顯示本機資料，網路恢復後會自動同步");
         setTimeout(() => setSyncClockPrompt("hide"), 2400);
       } finally {
         clearTimeout(slowConnectionTimer);
+      }
+    }
+
+    function getSyncTimeText() {
+      const now = new Date();
+      const hour = String(now.getHours()).padStart(2, "0");
+      const minute = String(now.getMinutes()).padStart(2, "0");
+      return `${hour}:${minute}`;
+    }
+
+    async function runBackgroundSync() {
+      if (pendingMutationCount > 0 || document.visibilityState === "hidden") return false;
+      const isSuccess = await fetchRemoteDataFromGAS();
+      if (isSuccess) {
+        renderEvents();
+        updateSyncBadge(`已同步 ${getSyncTimeText()}`, true);
+      } else {
+        updateSyncBadge("離線資料", false);
+      }
+      return isSuccess;
+    }
+
+    function scheduleImmediateAutomaticUpdate() {
+      clearTimeout(automaticUpdateDebounceTimer);
+      automaticUpdateDebounceTimer = setTimeout(() => {
+        if (document.visibilityState !== "hidden") {
+          runBackgroundSync();
+          checkForAppUpdate();
+        }
+      }, 250);
+    }
+
+    function setupAutomaticUpdates() {
+      if (automaticUpdatesStarted) return;
+      automaticUpdatesStarted = true;
+
+      checkForAppUpdate();
+      setInterval(() => runBackgroundSync(), CONFIG.DATA_SYNC_INTERVAL_MS);
+      setInterval(() => checkForAppUpdate(), CONFIG.VERSION_CHECK_INTERVAL_MS);
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") scheduleImmediateAutomaticUpdate();
+      });
+      window.addEventListener("focus", scheduleImmediateAutomaticUpdate);
+      window.addEventListener("online", scheduleImmediateAutomaticUpdate);
+    }
+
+    function checkForAppUpdate() {
+      if (versionCheckInFlight) return versionCheckInFlight;
+      versionCheckInFlight = performAppVersionCheck()
+        .finally(() => { versionCheckInFlight = null; });
+      return versionCheckInFlight;
+    }
+
+    async function performAppVersionCheck() {
+      try {
+        const manifestUrl = new URL(CONFIG.VERSION_MANIFEST_URL, window.location.href);
+        manifestUrl.searchParams.set("_ts", String(Date.now()));
+        const res = await fetch(manifestUrl.toString(), {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" }
+        });
+        if (!res.ok) return false;
+        const manifest = await res.json();
+        const latestVersion = String(manifest.version || "").trim();
+        if (!latestVersion || latestVersion === CONFIG.APP_VERSION) return false;
+
+        const reloadGuardKey = `line_app_reloaded_${latestVersion}`;
+        if (sessionStorage.getItem(reloadGuardKey)) return false;
+        sessionStorage.setItem(reloadGuardKey, "1");
+
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("appVersion", latestVersion);
+        nextUrl.searchParams.set("_refresh", String(Date.now()));
+        window.location.replace(nextUrl.toString());
+        return true;
+      } catch (err) {
+        console.warn("Version check fallback:", err);
+        return false;
       }
     }
 
@@ -1471,18 +1567,31 @@
     }
 
     // --- 4. GOOGLE SHEETS / GAS API SYNC (DEFENSIVE PARSING & TIMEOUT) ---
-    async function fetchRemoteDataFromGAS() {
+    function fetchRemoteDataFromGAS() {
+      if (remoteFetchInFlight) return remoteFetchInFlight;
+      remoteFetchInFlight = performRemoteDataFetch()
+        .finally(() => { remoteFetchInFlight = null; });
+      return remoteFetchInFlight;
+    }
+
+    async function performRemoteDataFetch() {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
 
+      const revisionAtStart = localMutationRevision;
       const controller = new AbortController();
       // Apps Script 冷啟動可能超過數秒；畫面已先解除等待，讓同步留在背景完成。
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       try {
-        const res = await fetch(CONFIG.GAS_API_URL, {
+        const requestUrl = new URL(CONFIG.GAS_API_URL);
+        requestUrl.searchParams.set("_ts", String(Date.now()));
+        const res = await fetch(requestUrl.toString(), {
           signal: controller.signal,
-          redirect: "follow"
+          redirect: "follow",
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" }
         });
+        if (!res.ok) throw new Error(`GAS GET ${res.status}`);
 
         const data = await res.json();
         
@@ -1521,23 +1630,18 @@
             });
             remoteEvt.attendees = Array.from(uniqueUserMap.values());
 
-            uniqueEventMap.set(remoteEvt.id, remoteEvt);
+            if (!isEventDeleted(remoteEvt)) uniqueEventMap.set(remoteEvt.id, remoteEvt);
           });
 
           const cleanEvents = Array.from(uniqueEventMap.values());
+
+          // 使用者在雲端請求期間剛完成操作時，不讓較早的回應覆蓋新畫面。
+          if (revisionAtStart !== localMutationRevision) return true;
 
           eventsData = cleanEvents.map(remoteEvt => {
             const localEvt = eventsData.find(l => l.id === remoteEvt.id);
             if (localEvt) {
               remoteEvt.history = mergeHistoryLogs(remoteEvt.history, localEvt.history);
-              if (currentUser) {
-                const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
-                const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
-
-                if (isLocalAttending && !isRemoteAttending) {
-                  remoteEvt.attendees.push(currentUser);
-                }
-              }
             }
             return remoteEvt;
           });
@@ -1555,24 +1659,52 @@
     }
 
     async function sendPostToGAS(payload) {
+      localMutationRevision += 1;
       // 本機測試模式只驗證操作反應，不寫入正式資料。
-      if (isDevMode) return;
-      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
+      if (isDevMode) return true;
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
 
+      pendingMutationCount += 1;
+      updateSyncBadge("同步變更中...", false);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       try {
-        await fetch(CONFIG.GAS_API_URL, {
+        const requestUrl = new URL(CONFIG.GAS_API_URL);
+        requestUrl.searchParams.set("_ts", String(Date.now()));
+        const res = await fetch(requestUrl.toString(), {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
           body: JSON.stringify(payload),
           redirect: "follow",
+          cache: "no-store",
           signal: controller.signal
         });
+        if (!res.ok) throw new Error(`GAS POST ${res.status}`);
+        const responseText = await res.text();
+        if (responseText.trim()) {
+          try {
+            const responseData = JSON.parse(responseText);
+            if (responseData.status && !["success", "ok"].includes(String(responseData.status).toLowerCase())) {
+              throw new Error(responseData.message || "GAS reported an error");
+            }
+          } catch (parseError) {
+            if (parseError instanceof SyntaxError) {
+              console.warn("GAS POST returned non-JSON response");
+            } else {
+              throw parseError;
+            }
+          }
+        }
+        updateSyncBadge("變更已送出", true);
+        setTimeout(() => runBackgroundSync(), 1200);
+        return true;
       } catch (err) {
         console.warn("GAS POST fallback:", err);
+        updateSyncBadge("變更尚未同步", false);
+        return false;
       } finally {
+        pendingMutationCount = Math.max(0, pendingMutationCount - 1);
         clearTimeout(timeoutId);
       }
     }
@@ -1584,6 +1716,7 @@
         try {
           eventsData = JSON.parse(stored);
           if (!Array.isArray(eventsData)) throw new Error("Invalid local events");
+          eventsData = eventsData.filter(evt => !isEventDeleted(evt));
           eventsData.forEach(evt => {
             evt.location = normalizeLocation(evt.location);
           });
@@ -1678,7 +1811,9 @@
         exportBtn.style.display = "none";
       }
 
-      const sortedEvents = [...eventsData].sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
+      const sortedEvents = eventsData
+        .filter(evt => !isEventDeleted(evt))
+        .sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
       
       const filteredEvents = sortedEvents.filter(evt => {
         const isEnded = parseSafeDate(evt.datetime) < new Date();
@@ -1952,6 +2087,8 @@ ${pageUrl}`;
         description: document.getElementById("input-desc").value.trim(),
         hostName: currentUser.displayName,
         hostUser: currentUser,
+        status: "active",
+        deleted: false,
         createdAt: new Date().toISOString(),
         attendees: [currentUser],
         history: []
@@ -2202,19 +2339,61 @@ ${pageUrl}`;
       const deleteBtn = document.getElementById("btn-delete-event");
       if (isHost) {
         deleteBtn.style.display = "block";
-        deleteBtn.onclick = () => {
+        deleteBtn.onclick = async () => {
           if (!ensureLoggedIn()) return;
           if (!isCurrentUserHost(evt)) {
             alert("只有目前主揪可以刪除活動！");
             return;
           }
           if (confirm(`確定要刪除活動「${evt.title}」嗎？此操作不可複原。`)) {
+            const originalIndex = eventsData.findIndex(e => e.id === eventId);
+            const deletedEvent = {
+              ...evt,
+              status: "deleted",
+              deleted: true,
+              deletedAt: new Date().toISOString(),
+              deletedBy: currentUser.displayName,
+              deletedByUserId: currentUser.userId,
+              history: Array.isArray(evt.history) ? [...evt.history] : []
+            };
+            addHistoryLog(deletedEvent, "刪除活動", "delete");
+
             eventsData = eventsData.filter(e => e.id !== eventId);
             saveLocalEvents();
-            sendPostToGAS({ action: "deleteEvent", eventId: eventId });
             renderEvents();
             closeModal("modal-detail");
-            alert("已成功刪除活動！");
+
+            const wasSent = await sendPostToGAS({
+              action: "deleteEvent",
+              eventId: eventId,
+              softDelete: true,
+              ...deletedEvent
+            });
+
+            if (!wasSent) {
+              if (originalIndex >= 0) eventsData.splice(originalIndex, 0, evt);
+              else eventsData.push(evt);
+              saveLocalEvents();
+              renderEvents();
+              alert("活動尚未從雲端刪除，已恢復顯示，請稍後再試。");
+              return;
+            }
+
+            if (isDevMode) {
+              alert("本機測試：活動已標記為刪除。");
+              return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const verified = await runBackgroundSync();
+            const stillExists = eventsData.some(eventItem => eventItem.id === eventId);
+            if (verified && !stillExists) {
+              alert("活動已從雲端刪除。");
+            } else if (verified) {
+              alert("雲端仍有這筆活動，GAS 的 deleteEvent 尚未正確更新 Sheet 刪除狀態。");
+            } else {
+              alert("刪除指令已送出，但目前無法連線確認 Sheet 狀態。");
+            }
           }
         };
       } else {
