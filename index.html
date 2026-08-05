@@ -80,6 +80,19 @@
       gap: 8px;
     }
 
+    .sync-status-badge {
+      font-size: 12px;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     .user-status-bar {
       display: flex;
       justify-content: space-between;
@@ -208,7 +221,7 @@
       background: #0f172a;
     }
 
-    /* LINE Event Cards */
+    /* LINE Event Cards & Skeleton Loading */
     .event-card {
       background: var(--line-card-bg);
       border-radius: 16px;
@@ -216,17 +229,26 @@
       margin-bottom: 16px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
       position: relative;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s;
     }
 
-    .event-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    .event-card.loading {
+      opacity: 0.65;
     }
 
-    .event-card.ended {
-      background: #f8fafc;
-      opacity: 0.85;
+    .skeleton-card {
+      background: linear-gradient(90deg, #ffffff 25%, #f1f5f9 50%, #ffffff 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.4s infinite;
+      border-radius: 16px;
+      height: 140px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+    }
+
+    @keyframes skeleton-loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     .card-header {
@@ -684,7 +706,7 @@
         <h1 class="brand-title">
           <span>💬 群組活動布告欄</span>
         </h1>
-        <span id="login-badge" style="font-size: 12px; color: var(--line-green); background: var(--line-green-light); padding: 3px 8px; border-radius: 10px; font-weight: 700;">LIFF 載入中...</span>
+        <span id="login-badge" class="sync-status-badge">🔄 同步中...</span>
       </div>
       
       <div class="user-status-bar">
@@ -727,7 +749,9 @@
 
     <!-- Event Cards Container -->
     <main id="event-list">
-      <!-- Dynamic Rendered Event Cards -->
+      <!-- Skeleton Loaders rendered on boot -->
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
     </main>
 
   </div>
@@ -981,7 +1005,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (5-MIN USER COOLDOWN & SMART MERGE)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (SKELETON & CACHE INVALIDATION)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -991,7 +1015,8 @@
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec",
       STORAGE_KEY: "line_events_v6",
       NOTICE_STORAGE_KEY: "line_top_notice_v1",
-      USER_CACHE_KEY: "line_user_profile_v2"
+      USER_CACHE_KEY: "line_user_profile_v2",
+      LAST_SYNC_KEY: "line_last_sync_time_v1"
     };
 
     // DEV Mock Profiles
@@ -1015,11 +1040,11 @@
 
     let currentFilter = "open";
     let activeEventId = null;
-    let isProcessingRSVP = false; // 防快速連點鎖
+    let isProcessingRSVP = false;
+    let isRemoteLoaded = false;
     
-    // 🛡️ 5分鐘防爆量連擊冷卻鎖 (Key: `${userId}_${eventId}`, Value: timestamp)
+    // 🛡️ 5分鐘連擊保護
     const userRSVPCooldowns = {};
-    const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
     // --- CROSS-PLATFORM UTILS ---
     function safeCopyText(text) {
@@ -1052,7 +1077,6 @@
       return d;
     }
 
-    // 🕒 時間格式化：僅顯示日期與整點 (不顯示分鐘)
     function formatDateTimeNoMinutes(dateStr) {
       const d = parseSafeDate(dateStr);
       const month = d.getMonth() + 1;
@@ -1076,21 +1100,51 @@
         : window.location.href;
     }
 
+    function updateSyncBadge(statusText, isDone = false) {
+      const badgeEl = document.getElementById("login-badge");
+      if (!badgeEl) return;
+      
+      badgeEl.innerText = statusText;
+      if (isDone) {
+        badgeEl.style.background = "var(--line-green-light)";
+        badgeEl.style.color = "var(--line-green-dark)";
+      } else {
+        badgeEl.style.background = "#f1f5f9";
+        badgeEl.style.color = "#64748b";
+      }
+    }
+
     // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", () => {
       checkDevModeVisibility();
       
-      loadLocalData();
+      const hasLocalData = loadLocalData();
       renderNoticeBoard();
-      renderEvents();
+
+      const lastSync = localStorage.getItem(CONFIG.LAST_SYNC_KEY);
+      const isCacheFresh = lastSync && (Date.now() - parseInt(lastSync, 10) < 45000); // 45秒內算最新
+
+      if (hasLocalData && isCacheFresh) {
+        renderEvents();
+        updateSyncBadge("⚡ 已是最新狀態", true);
+      } else if (hasLocalData) {
+        // 有本地快取但稍微舊了 -> 先渲染但顯示「同步中」標籤
+        renderEvents(true); // true 代表正在同步
+        updateSyncBadge("🔄 正在更新最新揪團...", false);
+      } else {
+        updateSyncBadge("🔄 正在同步雲端資料...", false);
+      }
+
       setupEventListeners();
       renderDevProfiles();
       setupInputFocusScroll();
 
       initLIFF();
       fetchRemoteDataFromGAS().then(() => {
+        isRemoteLoaded = true;
         renderNoticeBoard();
         renderEvents();
+        updateSyncBadge("✅ 已同步最新資料", true);
       });
     });
 
@@ -1117,7 +1171,6 @@
 
     // --- 3. LIFF AUTH & PERSISTENT SESSION ---
     async function initLIFF() {
-      const badgeEl = document.getElementById("login-badge");
       const loginBtn = document.getElementById("btn-login-action");
 
       const cached = localStorage.getItem(CONFIG.USER_CACHE_KEY);
@@ -1139,16 +1192,10 @@
               pictureUrl: profile.pictureUrl || "https://api.dicebear.com/7.x/pixel-art/svg?seed=" + profile.displayName
             };
             localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
-            badgeEl.innerText = "已連動 LINE";
-            badgeEl.style.background = "var(--line-green-light)";
-            badgeEl.style.color = "var(--line-green-dark)";
             loginBtn.innerText = "已登入";
             loginBtn.style.borderColor = "var(--line-green)";
             loginBtn.onclick = null;
           } else {
-            badgeEl.innerText = "未登入 LINE";
-            badgeEl.style.background = "#fee2e2";
-            badgeEl.style.color = "#dc2626";
             loginBtn.innerText = "點此登入";
             loginBtn.onclick = () => liff.login();
 
@@ -1189,7 +1236,7 @@
       return true;
     }
 
-    // --- 4. GOOGLE SHEETS / GAS API SYNC (WITH SMART MERGE PROTECTION) ---
+    // --- 4. GOOGLE SHEETS / GAS API SYNC ---
     async function fetchRemoteDataFromGAS() {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
@@ -1206,7 +1253,6 @@
                 const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
                 const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
                 
-                // 本地有、遠端還沒寫入 -> 保留本地報名，防止按鈕被恢復成未報名
                 if (isLocalAttending && !isRemoteAttending) {
                   remoteEvt.attendees.push(currentUser);
                 }
@@ -1214,6 +1260,7 @@
               return remoteEvt;
             });
             saveLocalEvents();
+            localStorage.setItem(CONFIG.LAST_SYNC_KEY, Date.now().toString());
           }
           if (data.notice) {
             noticeData.currentContent = data.notice.content;
@@ -1260,66 +1307,16 @@
       if (stored) {
         try {
           eventsData = JSON.parse(stored);
-          return;
+          return true;
         } catch (e) {}
       }
-
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const pastDay = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-
-      eventsData = [
-        {
-          id: "evt_1",
-          title: "週末羽球夜戰",
-          datetime: formatDateForInput(tomorrow, "19:30"),
-          location: "https://maps.google.com/?q=台北市立羽球館",
-          fee: "$200 / 人",
-          maxAttendees: 8,
-          description: "請自備球拍與運動鞋，程度不限！集合後直接分組打歡樂場。",
-          hostName: "小明",
-          hostUser: DEV_PROFILES[0],
-          createdAt: new Date().toISOString(),
-          attendees: [DEV_PROFILES[0], DEV_PROFILES[1], DEV_PROFILES[2]],
-          history: [{ author: "小明", time: getFormattedNow(), action: "創立了此活動" }]
-        },
-        {
-          id: "evt_2",
-          title: "懷舊電玩酒吧聚會",
-          datetime: formatDateForInput(nextWeek, "20:00"),
-          location: "Continue Gaming Bar (西門町)",
-          fee: "$350 (含一杯飲品)",
-          maxAttendees: 6,
-          description: "切磋快打旋風與瑪利歐賽車，暢聊 retro 遊戲經驗！",
-          hostName: "阿傑",
-          hostUser: DEV_PROFILES[1],
-          createdAt: new Date().toISOString(),
-          attendees: [DEV_PROFILES[1], DEV_PROFILES[3]],
-          history: [{ author: "阿傑", time: getFormattedNow(), action: "創立了此活動" }]
-        },
-        {
-          id: "evt_3",
-          title: "上週桌遊團 (已過期範例)",
-          datetime: formatDateForInput(pastDay, "14:00"),
-          location: "瘋桌遊 (松江店)",
-          fee: "$150",
-          maxAttendees: 6,
-          description: "體驗阿瓦隆與璀璨寶石！",
-          hostName: "小美",
-          hostUser: DEV_PROFILES[2],
-          createdAt: new Date().toISOString(),
-          attendees: [DEV_PROFILES[2], DEV_PROFILES[0]],
-          history: [{ author: "小美", time: getFormattedNow(), action: "創立了此活動" }]
-        }
-      ];
-
-      saveLocalEvents();
+      return false;
     }
 
     function loadLocalData() {
-      loadLocalEvents();
+      const hasEvents = loadLocalEvents();
       loadLocalNotice();
+      return hasEvents;
     }
 
     function saveLocalEvents() {
@@ -1363,7 +1360,7 @@
       document.getElementById("notice-time-info").innerText = noticeData.lastTime || "--";
     }
 
-    function renderEvents() {
+    function renderEvents(isSyncing = false) {
       const listEl = document.getElementById("event-list");
       listEl.innerHTML = "";
 
@@ -1417,7 +1414,7 @@
         const formattedTime = formatDateTimeNoMinutes(evt.datetime);
 
         const cardEl = document.createElement("div");
-        cardEl.className = `event-card ${isEnded ? 'ended' : ''}`;
+        cardEl.className = `event-card ${isEnded ? 'ended' : ''} ${isSyncing ? 'loading' : ''}`;
 
         let rsvpBtnHtml = "";
         if (isEnded) {
@@ -1562,7 +1559,7 @@ ${pageUrl}`;
       openModal("modal-copy-alert");
     }
 
-    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION (5-MIN USER COOLDOWN & MUTEX) ---
+    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
     async function toggleRSVP(eventId) {
       if (isProcessingRSVP) return; // 鎖住連擊
       if (!ensureLoggedIn()) return;
@@ -1579,9 +1576,8 @@ ${pageUrl}`;
 
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
 
-      // 🛡️ 5分鐘連擊保護：防止同一個使用者短時間內重複瘋狂連點
       if (existingIdx >= 0 && (now - lastActionTime < 1000)) {
-        return; // 1秒內的取消/報名直接過濾
+        return;
       }
 
       isProcessingRSVP = true; // 開啟連鎖
@@ -1601,7 +1597,6 @@ ${pageUrl}`;
           return;
         }
 
-        // 嚴格防止重複寫入相同成員
         const alreadyIn = evt.attendees.some(u => u.userId === currentUser.userId);
         if (!alreadyIn) {
           evt.attendees.push(currentUser);
@@ -1639,7 +1634,6 @@ ${pageUrl}`;
 
       const pageUrl = getShareableUrl();
       
-      // 💔 取消參加：極簡單行「已跳game OO活動」
       if (actionType === "cancel") {
         const cancelText = `已跳game【${evt.title}】`;
         safeCopyText(cancelText);
@@ -1899,7 +1893,7 @@ ${pageUrl}`;
           }
         };
       } else {
-        deleteBtn.style.display = "none"; // 非主揪不顯示刪除按鈕
+        deleteBtn.style.display = "none";
       }
 
       openModal("modal-detail");
