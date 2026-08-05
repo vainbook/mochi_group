@@ -844,7 +844,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-06T00:47:33+08:00">v260806.0047</time>
+          <time class="version-label" datetime="2026-08-06T00:59:22+08:00">v260806.0059</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1168,7 +1168,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0047",
+      APP_VERSION: "v260806.0059",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbxVPHws_s3yazs06n7tSPRqktRZawEK7B9tyHSQJIn7QIwXVivrS3GRZElqpU6Q4iOiZw/exec",
@@ -1205,6 +1205,7 @@
     let automaticUpdatesStarted = false;
     let automaticUpdateDebounceTimer = null;
     const processingRSVPEventIds = new Set();
+    const locationResolveCache = new Map();
 
     // --- CROSS-PLATFORM UTILS ---
     function safeCopyText(text) {
@@ -1650,7 +1651,12 @@
       const control = document.getElementById("fixed-group-control");
       if (!control) return;
       const isSupported = isDevMode || Number(serverSchemaVersion) >= 2;
-      control.style.display = isSupported ? "inline-flex" : "none";
+      const checkbox = document.getElementById("input-is-fixed");
+      const labelText = control.querySelector("span");
+      control.style.display = "inline-flex";
+      checkbox.disabled = !isSupported;
+      control.title = isSupported ? "" : "請先將 GAS 表格更新為版本 2";
+      if (labelText) labelText.textContent = isSupported ? "固定團" : "固定團（需更新）";
       if (!isSupported) setCreateFixedMode(false);
     }
 
@@ -2123,35 +2129,129 @@
       }
     }
 
-    function renderSafeLocation(container, locationValue) {
+    function isGoogleMapsUrl(urlValue) {
+      try {
+        const hostname = new URL(urlValue).hostname.toLowerCase();
+        return hostname === "maps.app.goo.gl" || hostname === "goo.gl" ||
+          /^(?:www\.|maps\.)?google\.(?:com|com\.tw)$/.test(hostname);
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function getGoogleMapsLabelFromUrl(urlValue) {
+      if (!isGoogleMapsUrl(urlValue)) return "";
+      try {
+        const url = new URL(urlValue);
+        const queryValue = url.searchParams.get("q") || url.searchParams.get("query") ||
+          url.searchParams.get("destination") || "";
+        if (queryValue && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(queryValue)) {
+          return queryValue.replace(/\s+/g, " ").trim().slice(0, 160);
+        }
+        const pathMatch = decodeURIComponent(url.pathname).match(/\/maps\/(?:place|search)\/([^/]+)/i);
+        return pathMatch ? pathMatch[1].replace(/\+/g, " ").trim().slice(0, 160) : "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function getLocationParts(locationValue) {
       const locationText = normalizeLocation(locationValue);
       const match = locationText.match(/https?:\/\/[^\s]+/i);
-      container.replaceChildren();
-
-      if (!match) {
-        container.textContent = locationText;
-        return;
-      }
+      if (!match) return { text: locationText, url: "", label: locationText, needsResolution: false };
 
       const safeUrl = getSafeHttpUrl(match[0]);
-      if (!safeUrl) {
-        container.textContent = locationText;
+      if (!safeUrl) return { text: locationText, url: "", label: locationText, needsResolution: false };
+
+      const manualLabel = locationText
+        .replace(match[0], " ")
+        .replace(/^[\s|,，:：\-]+|[\s|,，:：\-]+$/g, "")
+        .trim();
+      const urlLabel = getGoogleMapsLabelFromUrl(safeUrl);
+      const isGoogleMaps = isGoogleMapsUrl(safeUrl);
+      return {
+        text: locationText,
+        url: safeUrl,
+        label: manualLabel || urlLabel || (isGoogleMaps ? "Google 地圖位置" : "地點連結"),
+        needsResolution: isGoogleMaps && !manualLabel && !urlLabel
+      };
+    }
+
+    async function requestResolvedMapLocation(locationValue) {
+      const parts = getLocationParts(locationValue);
+      if (!parts.url || !parts.needsResolution || !CONFIG.GAS_API_URL || isDevMode) return null;
+      const cacheKey = parts.url;
+      if (locationResolveCache.has(cacheKey)) return locationResolveCache.get(cacheKey);
+
+      const requestPromise = (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+          const requestUrl = new URL(CONFIG.GAS_API_URL);
+          requestUrl.searchParams.set("_ts", String(Date.now()));
+          const response = await fetch(requestUrl.toString(), {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({
+              action: "resolveMapLocation",
+              location: parts.text,
+              clientVersion: CONFIG.APP_VERSION
+            }),
+            redirect: "follow",
+            cache: "no-store",
+            signal: controller.signal
+          });
+          if (!response.ok) return null;
+          const data = await response.json();
+          if (!data || data.status !== "success" || !data.displayName) return null;
+          return {
+            displayName: String(data.displayName),
+            location: String(data.location || parts.text),
+            mapUrl: getSafeHttpUrl(data.mapUrl) || parts.url
+          };
+        } catch (error) {
+          console.warn("Google Maps location resolution failed:", error);
+          return null;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      })();
+      locationResolveCache.set(cacheKey, requestPromise);
+      return requestPromise;
+    }
+
+    async function resolveLocationInput(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const originalValue = input.value;
+      const resolved = await requestResolvedMapLocation(originalValue);
+      if (resolved && input.value === originalValue) input.value = resolved.location;
+    }
+
+    function renderSafeLocation(container, locationValue) {
+      const parts = getLocationParts(locationValue);
+      container.replaceChildren();
+
+      if (!parts.url) {
+        container.textContent = parts.label;
         return;
       }
 
-      const beforeText = locationText.slice(0, match.index);
-      const afterText = locationText.slice(match.index + match[0].length);
-      if (beforeText) container.append(document.createTextNode(beforeText + " "));
-
       const link = document.createElement("a");
-      link.href = safeUrl;
+      link.href = parts.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.className = "location-link";
-      link.textContent = "點擊開啟地圖連結";
+      link.textContent = parts.label;
       container.append(link);
 
-      if (afterText) container.append(document.createTextNode(" " + afterText));
+      if (parts.needsResolution) {
+        const expectedUrl = parts.url;
+        requestResolvedMapLocation(parts.text).then(resolved => {
+          if (!resolved || !link.isConnected || link.href !== expectedUrl) return;
+          link.textContent = resolved.displayName;
+        });
+      }
     }
 
     function getSafeImageUrl(pictureUrl, displayName) {
@@ -3005,6 +3105,10 @@ ${memberDetails}
       document.getElementById("btn-refresh-data").onclick = () => {
         refreshDataFromCloud();
       };
+
+      ["input-location", "edit-location"].forEach(inputId => {
+        document.getElementById(inputId).addEventListener("blur", () => resolveLocationInput(inputId));
+      });
 
       document.querySelectorAll("[data-close]").forEach(btn => {
         btn.onclick = () => closeModal(btn.getAttribute("data-close"));

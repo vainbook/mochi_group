@@ -158,7 +158,6 @@ function doGet(e) {
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
     const payload = parsePayload_(e);
 
     if (payload.action === "verifyAdminPassword") {
@@ -169,6 +168,15 @@ function doPost(e) {
         serverTime: new Date().toISOString()
       });
     }
+
+    if (payload.action === "resolveMapLocation") {
+      return jsonOutput_(Object.assign({
+        status: "success",
+        serverTime: new Date().toISOString()
+      }, resolveMapLocation_(payload.location)));
+    }
+
+    lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
 
     const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
     const auditSheet = getRequiredSheet_(APP_CONFIG.AUDIT_SHEET);
@@ -213,6 +221,90 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (ignore) {}
   }
+}
+
+function resolveMapLocation_(locationValue) {
+  const location = String(locationValue || "").trim();
+  const urlMatch = location.match(/https?:\/\/[^\s]+/i);
+  if (!urlMatch) {
+    return { location: location || "待定", displayName: location || "待定", mapUrl: "" };
+  }
+
+  const mapUrl = String(urlMatch[0]);
+  if (!isAllowedGoogleMapsUrl_(mapUrl)) {
+    return { location: location, displayName: stripLocationUrl_(location, mapUrl) || "地點連結", mapUrl: mapUrl };
+  }
+
+  const existingName = stripLocationUrl_(location, mapUrl);
+  if (existingName) {
+    return { location: existingName + " " + mapUrl, displayName: existingName, mapUrl: mapUrl };
+  }
+
+  const resolvedUrl = followGoogleMapsRedirects_(mapUrl);
+  const displayName = extractGoogleMapsLabel_(resolvedUrl) || "Google 地圖位置";
+  return {
+    location: displayName + " " + mapUrl,
+    displayName: displayName,
+    mapUrl: mapUrl
+  };
+}
+
+function stripLocationUrl_(location, mapUrl) {
+  return String(location || "")
+    .replace(String(mapUrl || ""), " ")
+    .replace(/^[\s|,，:：\-]+|[\s|,，:：\-]+$/g, "")
+    .trim();
+}
+
+function isAllowedGoogleMapsUrl_(urlValue) {
+  const match = String(urlValue || "").match(/^https?:\/\/([^\/?#]+)/i);
+  if (!match) return false;
+  const hostname = String(match[1] || "").toLowerCase().replace(/:\d+$/, "");
+  return hostname === "maps.app.goo.gl" ||
+    hostname === "goo.gl" ||
+    /^(?:www\.|maps\.)?google\.(?:com|com\.tw)$/.test(hostname);
+}
+
+function followGoogleMapsRedirects_(initialUrl) {
+  let currentUrl = String(initialUrl || "");
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (!isAllowedGoogleMapsUrl_(currentUrl)) break;
+    try {
+      const response = UrlFetchApp.fetch(currentUrl, {
+        method: "get",
+        followRedirects: false,
+        muteHttpExceptions: true
+      });
+      const code = response.getResponseCode();
+      if (code < 300 || code >= 400) break;
+      const headers = response.getAllHeaders();
+      const nextUrl = String(headers.Location || headers.location || "");
+      if (!nextUrl || !/^https?:\/\//i.test(nextUrl) || !isAllowedGoogleMapsUrl_(nextUrl)) break;
+      currentUrl = nextUrl;
+    } catch (error) {
+      console.warn("Google Maps redirect resolution failed", error);
+      break;
+    }
+  }
+  return currentUrl;
+}
+
+function extractGoogleMapsLabel_(urlValue) {
+  const url = String(urlValue || "");
+  const queryMatch = url.match(/[?&](?:q|query|destination)=([^&#]+)/i);
+  if (queryMatch) return cleanGoogleMapsLabel_(queryMatch[1]);
+
+  const placeMatch = url.match(/\/maps\/(?:place|search)\/([^/?#]+)/i);
+  if (placeMatch) return cleanGoogleMapsLabel_(placeMatch[1]);
+  return "";
+}
+
+function cleanGoogleMapsLabel_(encodedValue) {
+  let value = String(encodedValue || "").replace(/\+/g, " ");
+  try { value = decodeURIComponent(value); } catch (ignore) {}
+  value = value.replace(/\s+/g, " ").trim();
+  if (!value || /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(value)) return "";
+  return value.slice(0, 160);
 }
 
 function saveEvent_(eventsSheet, auditSheet, payload) {
