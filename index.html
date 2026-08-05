@@ -928,7 +928,7 @@
       </div>
 
       <div class="modal-footer" style="display:flex; gap:10px;">
-        <button id="btn-delete-event" class="line-btn btn-delete" style="flex:1;">
+        <button id="btn-delete-event" class="line-btn btn-delete" style="flex:1; display:none;">
           刪除活動
         </button>
         <button class="line-btn btn-detail" style="flex:1;" data-close="modal-detail">
@@ -983,7 +983,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (JOU-TUAN & JUMP GAME TEXT)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (HOST ONLY DELETE & ANTI-DUPLICATE)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1017,6 +1017,7 @@
 
     let currentFilter = "open";
     let activeEventId = null;
+    let isProcessingRSVP = false; // 防快速連點鎖
 
     // --- CROSS-PLATFORM UTILS ---
     function safeCopyText(text) {
@@ -1533,8 +1534,9 @@ ${pageUrl}`;
       openModal("modal-copy-alert");
     }
 
-    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
-    function toggleRSVP(eventId) {
+    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION (帶防連點鎖與重複報名防護) ---
+    async function toggleRSVP(eventId) {
+      if (isProcessingRSVP) return; // 鎖住連擊
       if (!ensureLoggedIn()) return;
 
       const evt = eventsData.find(e => e.id === eventId);
@@ -1542,6 +1544,8 @@ ${pageUrl}`;
 
       const isEnded = parseSafeDate(evt.datetime) < new Date();
       if (isEnded) return;
+
+      isProcessingRSVP = true; // 開啟防連點鎖
 
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
       let actionType = "";
@@ -1554,28 +1558,41 @@ ${pageUrl}`;
       } else {
         if (evt.maxAttendees > 0 && evt.attendees.length >= evt.maxAttendees) {
           alert("此活動人數已額滿！");
+          isProcessingRSVP = false;
           return;
         }
-        evt.attendees.push(currentUser);
+
+        // 嚴格防止重複寫入相同成員
+        const alreadyIn = evt.attendees.some(u => u.userId === currentUser.userId);
+        if (!alreadyIn) {
+          evt.attendees.push(currentUser);
+        }
+
         actionType = "join";
         evt.history = evt.history || [];
         evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "報名參加了活動" });
       }
 
       saveLocalEvents();
-      sendPostToGAS({
-        action: "toggleRSVP",
-        eventId: evt.id,
-        userId: currentUser.userId,
-        displayName: currentUser.displayName,
-        pictureUrl: currentUser.pictureUrl
-      });
-
       renderEvents();
       triggerAutoCopyAndAlert(evt, actionType);
+
+      try {
+        await sendPostToGAS({
+          action: "toggleRSVP",
+          eventId: evt.id,
+          userId: currentUser.userId,
+          displayName: currentUser.displayName,
+          pictureUrl: currentUser.pictureUrl
+        });
+      } finally {
+        setTimeout(() => {
+          isProcessingRSVP = false; // 延遲解鎖
+        }, 400);
+      }
     }
 
-    // --- 12. AUTO-COPY SINGLE EVENT TRIGGER (取消發送「已跳game OO活動」) ---
+    // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
     function triggerAutoCopyAndAlert(evt, actionType) {
       const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
         month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
@@ -1726,7 +1743,7 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(evt, "update");
     });
 
-    // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE ---
+    // --- 16. DETAIL MODAL & @MENTION & HOST-ONLY DELETE ---
     function openDetailModal(eventId) {
       activeEventId = eventId;
       const evt = eventsData.find(e => e.id === eventId);
@@ -1823,17 +1840,29 @@ ${pageUrl}`;
         }
       };
 
-      document.getElementById("btn-delete-event").onclick = () => {
-        if (!ensureLoggedIn()) return;
-        if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
-          eventsData = eventsData.filter(e => e.id !== eventId);
-          saveLocalEvents();
-          sendPostToGAS({ action: "deleteEvent", eventId: eventId });
-          renderEvents();
-          closeModal("modal-detail");
-          alert("已成功刪除活動！");
-        }
-      };
+      // 👑 檢查刪除權限：僅限主揪本人或創立者
+      const isHost = currentUser && (
+        (evt.hostUser && evt.hostUser.userId === currentUser.userId) ||
+        (evt.hostName && evt.hostName === currentUser.displayName)
+      );
+
+      const deleteBtn = document.getElementById("btn-delete-event");
+      if (isHost) {
+        deleteBtn.style.display = "block";
+        deleteBtn.onclick = () => {
+          if (!ensureLoggedIn()) return;
+          if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
+            eventsData = eventsData.filter(e => e.id !== eventId);
+            saveLocalEvents();
+            sendPostToGAS({ action: "deleteEvent", eventId: eventId });
+            renderEvents();
+            closeModal("modal-detail");
+            alert("✅ 已成功刪除活動！");
+          }
+        };
+      } else {
+        deleteBtn.style.display = "none"; // 非主揪不顯示刪除按鈕
+      }
 
       openModal("modal-detail");
     }
