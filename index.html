@@ -1028,7 +1028,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (SYNC CLOCK PROMPT & TIMEOUT)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (DEDUPLICATION & HIGH SPEED SYNC)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1180,7 +1180,7 @@
 
       initLIFF();
 
-      // 最多等 2.5 秒超時鎖
+      // 最多等待 5.5 秒超時，並進行強效去重
       fetchRemoteDataFromGAS().then(isSuccess => {
         renderNoticeBoard();
         renderEvents();
@@ -1272,7 +1272,7 @@
 
     function ensureLoggedIn() {
       if (typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
-        if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否廢話登入？")) {
+        if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
           liff.login();
         }
         return false;
@@ -1284,19 +1284,47 @@
       return true;
     }
 
-    // --- 4. GOOGLE SHEETS / GAS API SYNC ---
+    // --- 4. GOOGLE SHEETS / GAS API SYNC (WITH FRONTEND DEDUPLICATION) ---
     async function fetchRemoteDataFromGAS() {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
 
-      const fetchPromise = fetch(CONFIG.GAS_API_URL, { redirect: "follow" }).then(res => res.json());
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500));
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5500);
 
       try {
-        const data = await Promise.race([fetchPromise, timeoutPromise]);
+        const res = await fetch(CONFIG.GAS_API_URL, {
+          signal: controller.signal,
+          redirect: "follow"
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json();
         
         if (data && data.status === "success") {
           if (data.events && Array.isArray(data.events)) {
-            eventsData = data.events.map(remoteEvt => {
+            // 🛡️ 1. 活動 ID 去重：針對 GAS 回傳的重複 ID 取最新一筆
+            const uniqueEventMap = new Map();
+            data.events.forEach(remoteEvt => {
+              if (!remoteEvt || !remoteEvt.id) return;
+              
+              // 🛡️ 2. 成員去重
+              if (remoteEvt.attendees && Array.isArray(remoteEvt.attendees)) {
+                const uniqueUserMap = new Map();
+                remoteEvt.attendees.forEach(u => {
+                  if (u && u.userId) uniqueUserMap.set(u.userId, u);
+                });
+                remoteEvt.attendees = Array.from(uniqueUserMap.values());
+              } else {
+                remoteEvt.attendees = [];
+              }
+
+              uniqueEventMap.set(remoteEvt.id, remoteEvt);
+            });
+
+            const cleanEvents = Array.from(uniqueEventMap.values());
+
+            // 🛡️ 3. 智慧合併保護：絕不覆蓋當前用戶剛發起的報名
+            eventsData = cleanEvents.map(remoteEvt => {
               const localEvt = eventsData.find(l => l.id === remoteEvt.id);
               if (localEvt && currentUser) {
                 const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
@@ -1310,6 +1338,7 @@
             });
             saveLocalEvents();
           }
+
           if (data.notice) {
             noticeData.currentContent = data.notice.content;
             noticeData.lastAuthor = data.notice.author;
@@ -1320,7 +1349,9 @@
           return true;
         }
       } catch (err) {
-        console.warn("GAS fetch timeout fallback:", err);
+        console.warn("GAS fetch aborted or failed:", err);
+      } finally {
+        clearTimeout(timeoutId);
       }
       return false;
     }
@@ -1328,15 +1359,21 @@
     async function sendPostToGAS(payload) {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       try {
         await fetch(CONFIG.GAS_API_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
           body: JSON.stringify(payload),
-          redirect: "follow"
+          redirect: "follow",
+          signal: controller.signal
         });
       } catch (err) {
         console.warn("GAS POST fallback:", err);
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 
@@ -1361,56 +1398,7 @@
         } catch (e) {}
       }
 
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const pastDay = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-
-      eventsData = [
-        {
-          id: "evt_1",
-          title: "週末羽球夜戰",
-          datetime: formatDateForInput(tomorrow, "19:30"),
-          location: "https://maps.google.com/?q=台北市立羽球館",
-          fee: "$200 / 人",
-          maxAttendees: 8,
-          description: "請自備球拍與運動鞋，程度不限！集合後直接分組打歡樂場。",
-          hostName: "小明",
-          hostUser: DEV_PROFILES[0],
-          createdAt: new Date().toISOString(),
-          attendees: [DEV_PROFILES[0], DEV_PROFILES[1], DEV_PROFILES[2]],
-          history: [{ author: "小明", time: getFormattedNow(), action: "創立了此活動" }]
-        },
-        {
-          id: "evt_2",
-          title: "懷舊電玩酒吧聚會",
-          datetime: formatDateForInput(nextWeek, "20:00"),
-          location: "Continue Gaming Bar (西門町)",
-          fee: "$350 (含一杯飲品)",
-          maxAttendees: 6,
-          description: "切磋快打旋風與瑪利歐賽車，暢聊 retro 遊戲經驗！",
-          hostName: "阿傑",
-          hostUser: DEV_PROFILES[1],
-          createdAt: new Date().toISOString(),
-          attendees: [DEV_PROFILES[1], DEV_PROFILES[3]],
-          history: [{ author: "阿傑", time: getFormattedNow(), action: "創立了此活動" }]
-        },
-        {
-          id: "evt_3",
-          title: "上週桌遊團 (已過期範例)",
-          datetime: formatDateForInput(pastDay, "14:00"),
-          location: "瘋桌遊 (松江店)",
-          fee: "$150",
-          maxAttendees: 6,
-          description: "體驗阿瓦隆與璀璨寶石！",
-          hostName: "小美",
-          hostUser: DEV_PROFILES[2],
-          createdAt: new Date().toISOString(),
-          attendees: [DEV_PROFILES[2], DEV_PROFILES[0]],
-          history: [{ author: "小美", time: getFormattedNow(), action: "創立了此活動" }]
-        }
-      ];
-
+      eventsData = [];
       saveLocalEvents();
     }
 
