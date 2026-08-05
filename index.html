@@ -224,7 +224,6 @@
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      margin-left: auto;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       white-space: nowrap;
       min-height: 44px;
@@ -232,6 +231,29 @@
 
     .export-btn:hover {
       background: #0f172a;
+    }
+
+    .refresh-btn {
+      flex: 0 0 auto;
+      margin-left: auto;
+      min-height: 44px;
+      padding: 8px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 20px;
+      background: #ffffff;
+      color: #334155;
+      font-family: var(--font-line);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+
+    .refresh-btn:disabled {
+      color: #64748b;
+      background: #f1f5f9;
+      cursor: wait;
     }
 
     /* LINE Event Cards */
@@ -628,13 +650,19 @@
 
     .datetime-picker-grid {
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(68px, 0.8fr) minmax(68px, 0.8fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       align-items: end;
+      width: 100%;
     }
 
     .datetime-picker-field {
       min-width: 0;
+      width: 100%;
+    }
+
+    .datetime-picker-field:first-child {
+      grid-column: 1 / -1;
     }
 
     .datetime-picker-label {
@@ -648,6 +676,8 @@
     .datetime-picker-grid input[type="date"],
     .datetime-picker-grid select {
       width: 100%;
+      min-width: 0;
+      max-width: 100%;
       cursor: pointer;
     }
 
@@ -662,28 +692,11 @@
       resize: vertical;
     }
 
-    .host-transfer-panel {
-      margin-top: 10px;
-      padding: 10px;
-      background: #ffffff;
-      border: 1px solid #dbe3ea;
-      border-radius: 10px;
-    }
-
-    .host-transfer-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      align-items: center;
+    .form-help {
       margin-top: 6px;
-    }
-
-    .host-transfer-row .line-input {
-      min-width: 0;
-      height: 44px;
-      min-height: 44px;
-      font-size: 14px;
-      padding: 8px 10px;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     /* History Log List */
@@ -766,7 +779,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-05T23:38:51+08:00">v260805.2338</time>
+          <time class="version-label" datetime="2026-08-05T23:58:20+08:00">v260805.2358</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -795,6 +808,7 @@
       <button id="btn-export-ended" class="export-btn" style="display: none;">
         匯出歷史紀錄
       </button>
+      <button id="btn-refresh-data" class="refresh-btn" type="button">重新整理</button>
     </nav>
 
     <!-- Event Cards Container -->
@@ -860,7 +874,7 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="input-max">人數上限 (0 代表無限制)</label>
-            <input type="number" id="input-max" class="line-input" value="8" min="0">
+            <input type="number" id="input-max" class="line-input" value="0" min="0">
           </div>
           <div class="form-group">
             <label class="form-label" for="input-desc">補充說明</label>
@@ -924,6 +938,11 @@
             <input type="number" id="edit-max" class="line-input" min="0">
           </div>
           <div class="form-group">
+            <label class="form-label" for="edit-host-user">主揪</label>
+            <select id="edit-host-user" class="line-input" aria-describedby="edit-host-help"></select>
+            <div id="edit-host-help" class="form-help">主揪若要退出活動，需要交棒給新主揪</div>
+          </div>
+          <div class="form-group">
             <label class="form-label" for="edit-desc">補充說明</label>
             <textarea id="edit-desc" class="line-textarea"></textarea>
           </div>
@@ -953,19 +972,7 @@
           <div style="margin-bottom:8px;"><strong>地點：</strong><span id="detail-location">--</span></div>
           <div style="margin-bottom:8px;"><strong>費用：</strong><span id="detail-fee">--</span></div>
           
-          <div>
-            <strong>主揪：</strong><span id="detail-host-name">--</span>
-            <div id="host-transfer-panel" class="host-transfer-panel" style="display:none;">
-              <label class="form-label" for="detail-host-transfer-select" style="margin-bottom:0;">交棒給已報名成員</label>
-              <div class="host-transfer-row">
-                <select id="detail-host-transfer-select" class="line-input" aria-label="選擇新主揪">
-                  <option value="">請選擇成員</option>
-                </select>
-                <button id="btn-transfer-host" class="line-btn btn-join" type="button">確認交棒</button>
-              </div>
-              <div id="host-transfer-help" style="margin-top:6px; color:#64748b; font-size:12px; line-height:1.5;"></div>
-            </div>
-          </div>
+          <div><strong>主揪：</strong><span id="detail-host-name">--</span></div>
         </div>
 
         <div style="margin-bottom:14px;">
@@ -1054,7 +1061,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260805.2338",
+      APP_VERSION: "v260805.2358",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbxVPHws_s3yazs06n7tSPRqktRZawEK7B9tyHSQJIn7QIwXVivrS3GRZElqpU6Q4iOiZw/exec",
@@ -1357,6 +1364,48 @@
         updateSyncBadge("離線資料", false);
       }
       return isSuccess;
+    }
+
+    async function refreshDataFromCloud() {
+      const refreshBtn = document.getElementById("btn-refresh-data");
+      if (!refreshBtn || refreshBtn.disabled) return;
+
+      if (pendingMutationCount > 0) {
+        refreshBtn.disabled = true;
+        refreshBtn.innerText = "同步變更中...";
+        setSyncClockPrompt("syncing", "正在先儲存目前的操作...");
+        setTimeout(() => {
+          refreshBtn.disabled = false;
+          refreshBtn.innerText = "重新整理";
+          runBackgroundSync();
+        }, 1500);
+        return;
+      }
+
+      refreshBtn.disabled = true;
+      refreshBtn.innerText = "更新中...";
+      updateSyncBadge("同步中...", false);
+      setSyncClockPrompt("syncing", "正在重新整理最新活動...");
+
+      try {
+        const isSuccess = await fetchRemoteDataFromGAS();
+        renderEvents();
+        if (isSuccess) {
+          refreshBtn.innerText = "已更新";
+          updateSyncBadge(`已同步 ${getSyncTimeText()}`, true);
+          setSyncClockPrompt("done", "已成功連動最新雲端資料");
+        } else {
+          refreshBtn.innerText = "更新失敗";
+          updateSyncBadge("離線資料", false);
+          setSyncClockPrompt("offline", "目前無法連線，稍後會自動重試");
+        }
+      } finally {
+        setTimeout(() => {
+          refreshBtn.disabled = false;
+          refreshBtn.innerText = "重新整理";
+          setSyncClockPrompt("hide");
+        }, 1200);
+      }
     }
 
     function scheduleImmediateAutomaticUpdate() {
@@ -1869,7 +1918,7 @@
         if (isEnded) {
           rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
         } else if (isAttending && isHost) {
-          rsvpBtnHtml = `<button class="line-btn btn-detail" disabled title="請先到詳情交棒給其他已報名成員">主揪請先交棒</button>`;
+          rsvpBtnHtml = `<button class="line-btn btn-detail" disabled title="如需退出，請到編輯內容更換主揪">你是主揪</button>`;
         } else if (isAttending) {
           rsvpBtnHtml = `<button class="line-btn btn-cancel rsvp-action">取消參加</button>`;
         } else if (isFull) {
@@ -1998,7 +2047,7 @@ ${pageUrl}`;
 
       if (existingIdx >= 0) {
         if (isCurrentUserHost(evt)) {
-          alert("主揪無法直接取消參加，請先到活動詳情將主揪交棒給其他已報名成員。");
+          alert("主揪無法直接取消參加，請先到編輯內容將主揪交棒給其他已報名成員。");
           return;
         }
         evt.attendees.splice(existingIdx, 1);
@@ -2131,6 +2180,30 @@ ${pageUrl}`;
       return `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
     }
 
+    function populateEditHostOptions(evt) {
+      const select = document.getElementById("edit-host-user");
+      const hostUser = getEventHostUser(evt);
+      const memberMap = new Map();
+
+      (evt.attendees || []).forEach(member => {
+        if (member && member.userId) memberMap.set(String(member.userId), member);
+      });
+      if (hostUser && hostUser.userId && !memberMap.has(String(hostUser.userId))) {
+        memberMap.set(String(hostUser.userId), hostUser);
+      }
+
+      select.replaceChildren();
+      memberMap.forEach(member => {
+        const option = document.createElement("option");
+        option.value = String(member.userId);
+        option.textContent = String(member.displayName || "未命名成員");
+        select.append(option);
+      });
+
+      select.value = hostUser?.userId ? String(hostUser.userId) : "";
+      select.disabled = memberMap.size <= 1;
+    }
+
     // --- 15. EDIT EVENT SUBMISSION LOGIC ---
     document.getElementById("form-edit-event").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -2151,16 +2224,26 @@ ${pageUrl}`;
       const newFee = document.getElementById("edit-fee").value.trim() || "免費";
       const newMax = parseInt(document.getElementById("edit-max").value, 10) || 0;
       const newDesc = document.getElementById("edit-desc").value.trim();
+      const currentHost = getEventHostUser(evt);
+      const selectedHostId = String(document.getElementById("edit-host-user").value || currentHost?.userId || "");
+      const selectedHost = (evt.attendees || []).find(member =>
+        member && member.userId && String(member.userId) === selectedHostId
+      ) || (currentHost && String(currentHost.userId) === selectedHostId ? currentHost : null);
+      if (!selectedHost) {
+        alert("請選擇一位已報名成員擔任主揪。");
+        return;
+      }
+      const hostChanged = String(currentHost?.userId || "") !== selectedHostId;
 
-      let changes = [];
-      if (evt.title !== newTitle) changes.push(`名稱改為「${newTitle}」`);
-      if (evt.datetime !== newDatetime) changes.push(`時間改為「${formatDateTime(newDatetime)}」`);
-      if (evt.location !== newLocation) changes.push(`地點改為「${newLocation}」`);
-      if (evt.fee !== newFee) changes.push(`費用改為「${newFee}」`);
-      if (getMaxAttendees(evt) !== newMax) changes.push(`人數上限改為「${newMax || "無限制"}」`);
-      if (evt.description !== newDesc) changes.push("修改補充說明");
+      const contentChanges = [];
+      if (evt.title !== newTitle) contentChanges.push(`名稱改為「${newTitle}」`);
+      if (evt.datetime !== newDatetime) contentChanges.push(`時間改為「${formatDateTime(newDatetime)}」`);
+      if (evt.location !== newLocation) contentChanges.push(`地點改為「${newLocation}」`);
+      if (evt.fee !== newFee) contentChanges.push(`費用改為「${newFee}」`);
+      if (getMaxAttendees(evt) !== newMax) contentChanges.push(`人數上限改為「${newMax || "無限制"}」`);
+      if (evt.description !== newDesc) contentChanges.push("修改補充說明");
 
-      if (changes.length === 0) {
+      if (contentChanges.length === 0 && !hostChanged) {
         closeModal("modal-edit");
         return;
       }
@@ -2172,10 +2255,22 @@ ${pageUrl}`;
       evt.maxAttendees = newMax;
       evt.description = newDesc;
 
-      addHistoryLog(evt, `更新活動：${changes.join("、")}`, "update");
+      if (contentChanges.length > 0) {
+        addHistoryLog(evt, `更新活動：${contentChanges.join("、")}`, "update");
+      }
+      if (hostChanged) {
+        const newHostName = String(selectedHost.displayName || "未命名成員");
+        evt.hostUser = {
+          userId: selectedHost.userId,
+          displayName: newHostName,
+          pictureUrl: selectedHost.pictureUrl || ""
+        };
+        evt.hostName = newHostName;
+        addHistoryLog(evt, `將主揪交棒給「${newHostName}」`, "handoff");
+      }
 
       saveLocalEvents();
-      sendPostToGAS({ action: "saveEvent", eventAction: "update", ...evt });
+      sendPostToGAS({ action: "saveEvent", eventAction: hostChanged ? "handoff" : "update", ...evt });
 
       renderEvents();
       closeModal("modal-edit");
@@ -2203,74 +2298,11 @@ ${pageUrl}`;
       const editBtn = document.getElementById("btn-trigger-edit");
       const hostUser = getEventHostUser(evt);
       const hostDisplayName = evt.hostName || hostUser?.displayName || "未指定";
-      const transferPanel = document.getElementById("host-transfer-panel");
-      const transferSelect = document.getElementById("detail-host-transfer-select");
-      const transferBtn = document.getElementById("btn-transfer-host");
-      const transferHelp = document.getElementById("host-transfer-help");
       document.getElementById("detail-host-name").innerText = hostDisplayName;
       editBtn.style.display = isHost ? "flex" : "none";
       document.getElementById("detail-desc").innerText = evt.description || "尚無補充說明。";
       document.getElementById("detail-capacity-text").innerText = 
         `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''}`;
-
-      transferPanel.style.display = isHost ? "block" : "none";
-      transferSelect.replaceChildren();
-      const placeholderOption = document.createElement("option");
-      placeholderOption.value = "";
-      placeholderOption.textContent = "請選擇成員";
-      transferSelect.append(placeholderOption);
-
-      const hostUserId = hostUser?.userId ? String(hostUser.userId) : "";
-      const transferCandidates = evt.attendees.filter(attendee =>
-        attendee && attendee.userId && String(attendee.userId) !== hostUserId
-      );
-      transferCandidates.forEach(attendee => {
-        const option = document.createElement("option");
-        option.value = String(attendee.userId);
-        option.textContent = String(attendee.displayName || "未命名成員");
-        transferSelect.append(option);
-      });
-
-      const hasTransferCandidate = transferCandidates.length > 0;
-      transferSelect.disabled = !hasTransferCandidate;
-      transferBtn.disabled = !hasTransferCandidate;
-      transferHelp.innerText = hasTransferCandidate
-        ? "交棒後，新主揪會取得編輯與刪除活動的權限；原主揪才可取消參加。"
-        : "目前沒有其他已報名成員，需有人報名後才能交棒。";
-
-      transferBtn.onclick = () => {
-        if (!ensureLoggedIn()) return;
-        if (!isCurrentUserHost(evt)) {
-          alert("只有目前主揪可以交棒！");
-          openDetailModal(evt.id);
-          return;
-        }
-
-        const newHost = evt.attendees.find(attendee =>
-          attendee && attendee.userId && String(attendee.userId) === String(transferSelect.value)
-        );
-        if (!newHost || String(newHost.userId) === hostUserId) {
-          alert("請選擇一位其他已報名成員交棒。");
-          return;
-        }
-
-        const newHostName = String(newHost.displayName || "未命名成員");
-        if (!confirm(`確定將主揪交棒給「${newHostName}」嗎？`)) return;
-
-        evt.hostUser = {
-          userId: newHost.userId,
-          displayName: newHostName,
-          pictureUrl: newHost.pictureUrl || ""
-        };
-        evt.hostName = newHostName;
-        addHistoryLog(evt, `將主揪交棒給「${newHostName}」`, "handoff");
-
-        saveLocalEvents();
-        sendPostToGAS({ action: "saveEvent", eventAction: "handoff", ...evt });
-        renderEvents();
-        openDetailModal(evt.id);
-        alert("主揪已完成交棒，你現在可以取消參加此活動。");
-      };
 
       const attendeesEl = document.getElementById("detail-attendees");
       if (evt.attendees.length === 0) {
@@ -2320,6 +2352,7 @@ ${pageUrl}`;
         document.getElementById("edit-fee").value = evt.fee || "";
         document.getElementById("edit-max").value = evt.maxAttendees || 0;
         document.getElementById("edit-desc").value = evt.description || "";
+        populateEditHostOptions(evt);
 
         openModal("modal-edit");
       };
@@ -2480,6 +2513,10 @@ ${pageUrl}`;
 
       document.getElementById("btn-export-ended").onclick = () => {
         exportEndedEvents();
+      };
+
+      document.getElementById("btn-refresh-data").onclick = () => {
+        refreshDataFromCloud();
       };
 
       document.querySelectorAll("[data-close]").forEach(btn => {
