@@ -468,7 +468,7 @@
       backdrop-filter: blur(4px);
       display: flex;
       justify-content: center;
-      align-items: flex-end; /* 手機端靠底顯示，防遮擋 */
+      align-items: flex-end;
       z-index: 1000;
       padding: 0;
       opacity: 0;
@@ -540,7 +540,7 @@
       color: #0f172a;
     }
 
-    /* Form Inputs (font-size 16px prevents iOS Safari auto-zoom) */
+    /* Form Inputs */
     .form-group {
       margin-bottom: 14px;
     }
@@ -561,7 +561,7 @@
       padding: 12px;
       border-radius: 10px;
       font-family: var(--font-line);
-      font-size: 16px; /* 關鍵：防 iOS 自動放大網頁畫面 */
+      font-size: 16px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
@@ -665,16 +665,16 @@
         <h1 class="brand-title">
           <span>💬 群組活動布告欄</span>
         </h1>
-        <span style="font-size: 12px; color: var(--line-green); background: var(--line-green-light); padding: 3px 8px; border-radius: 10px; font-weight: 700;">LIFF APP</span>
+        <span id="login-badge" style="font-size: 12px; color: var(--line-green); background: var(--line-green-light); padding: 3px 8px; border-radius: 10px; font-weight: 700;">LIFF 載入中...</span>
       </div>
       
       <div class="user-status-bar">
         <div>
           <span style="color: #64748b;">登入身份：</span>
           <span id="current-name" class="user-name">載入中...</span>
-          <span id="liff-status" style="font-size: 11px; margin-left: 4px; color: var(--line-green); display:none;">[INIT]</span>
         </div>
-        <button id="btn-dev-toggle" class="dev-btn">⚙️ 切換測試身分</button>
+        <button id="btn-login-action" class="dev-btn" style="display:inline-block; border-color:var(--line-green); color:var(--line-green);">🔑 LINE 登入</button>
+        <button id="btn-dev-toggle" class="dev-btn">⚙️ 測試切換身分</button>
       </div>
     </header>
 
@@ -951,7 +951,7 @@
     </div>
   </div>
 
-  <!-- Embedded Core JS App Logic with Google Sheet Sync -->
+  <!-- Embedded Core JS App Logic with Google Sheet Sync & LIFF Auth Guard -->
   <script>
     /* ==========================================================================
        NATIVE LINE CHAT UI EVENT BULLETIN BOARD (CORE LOGIC)
@@ -959,10 +959,11 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      LIFF_ID: "YOUR_LIFF_ID_HERE", // 請貼上你的 LINE Developers LIFF ID
+      LIFF_ID: "2010984505-Nv6CpgYO", // 已設定你的正式 LINE LIFF ID
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec",
       STORAGE_KEY: "line_events_v6",
-      NOTICE_STORAGE_KEY: "line_top_notice_v1"
+      NOTICE_STORAGE_KEY: "line_top_notice_v1",
+      USER_CACHE_KEY: "line_user_profile_v2"
     };
 
     // DEV Mock Profiles
@@ -973,18 +974,18 @@
       { userId: "dev_04", displayName: "老王", pictureUrl: "https://api.dicebear.com/7.x/pixel-art/svg?seed=HackerSam" }
     ];
 
-    let currentUser = DEV_PROFILES[0];
+    let currentUser = null;
     let eventsData = [];
     let noticeData = {
       currentContent: "📌 歡迎使用群組活動布告欄！最新注意事項與群組規則將在此公開提醒。",
-      lastAuthor: "小明",
+      lastAuthor: "管理員",
       lastTime: getFormattedNow(),
       history: [
-        { author: "小明", time: getFormattedNow(), content: "📌 歡迎使用群組活動布告欄！最新注意事項與群組規則將在此公開提醒。" }
+        { author: "管理員", time: getFormattedNow(), content: "📌 歡迎使用群組活動布告欄！最新注意事項與群組規則將在此公開提醒。" }
       ]
     };
 
-    let currentFilter = "open"; // 預設顯示「報名中」
+    let currentFilter = "open";
     let activeEventId = null;
 
     // --- 2. INITIALIZATION ---
@@ -999,7 +1000,6 @@
       renderEvents();
     });
 
-    // 檢查 URL 網址是否包含 ?dev=true ，否則隱藏測試按鈕
     function checkDevModeVisibility() {
       const urlParams = new URLSearchParams(window.location.search);
       const isDevParam = urlParams.get('dev') === 'true';
@@ -1011,9 +1011,22 @@
       }
     }
 
-    // --- 3. LIFF AUTH & USER SETUP ---
+    // --- 3. LIFF AUTH & PERSISTENT SESSION (登入憑證持久保留) ---
     async function initLIFF() {
-      if (CONFIG.LIFF_ID && CONFIG.LIFF_ID !== "YOUR_LIFF_ID_HERE" && typeof liff !== "undefined") {
+      const badgeEl = document.getElementById("login-badge");
+      const loginBtn = document.getElementById("btn-login-action");
+
+      // 1. 先嘗試讀取手機本地快取的登入身分 (秒開體驗)
+      const cached = localStorage.getItem(CONFIG.USER_CACHE_KEY);
+      if (cached) {
+        try {
+          currentUser = JSON.parse(cached);
+          updateUserUI();
+        } catch(e) {}
+      }
+
+      // 2. 初始化 LIFF SDK
+      if (CONFIG.LIFF_ID && typeof liff !== "undefined") {
         try {
           await liff.init({ liffId: CONFIG.LIFF_ID });
           if (liff.isLoggedIn()) {
@@ -1021,20 +1034,60 @@
             currentUser = {
               userId: profile.userId,
               displayName: profile.displayName,
-              pictureUrl: profile.pictureUrl || "https://api.dicebear.com/7.x/pixel-art/svg?seed=Default"
+              pictureUrl: profile.pictureUrl || "https://api.dicebear.com/7.x/pixel-art/svg?seed=" + profile.displayName
             };
+            // 寫入本地快取，同手機下次開啟免重新登入
+            localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
+            badgeEl.innerText = "已連動 LINE";
+            badgeEl.style.background = "var(--line-green-light)";
+            badgeEl.style.color = "var(--line-green-dark)";
+            loginBtn.innerText = "✅ 已登入";
+            loginBtn.style.borderColor = "var(--line-green)";
+            loginBtn.onclick = null;
           } else {
-            liff.login();
+            badgeEl.innerText = "未登入 LINE";
+            badgeEl.style.background = "#fee2e2";
+            badgeEl.style.color = "#dc2626";
+            loginBtn.innerText = "🔑 點此登入";
+            loginBtn.onclick = () => liff.login();
+
+            // 如果沒有快取且在外部瀏覽器，自動觸發一次 LINE 登入
+            if (!currentUser && liff.isInClient()) {
+              liff.login();
+            }
           }
         } catch (err) {
-          console.warn("LIFF init failed, using default mode:", err);
+          console.warn("LIFF init failed:", err);
+          if (!currentUser) currentUser = DEV_PROFILES[0];
         }
+      } else {
+        if (!currentUser) currentUser = DEV_PROFILES[0];
       }
+
       updateUserUI();
     }
 
     function updateUserUI() {
-      document.getElementById("current-name").innerText = currentUser.displayName;
+      if (currentUser) {
+        document.getElementById("current-name").innerText = currentUser.displayName;
+      } else {
+        document.getElementById("current-name").innerText = "未登入成員";
+      }
+    }
+
+    // 🔒 登入保護 Guard (確保只有登入的使用者才能辦活動 / 參加 / 編輯)
+    function ensureLoggedIn() {
+      if (typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
+        if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
+          liff.login();
+        }
+        return false;
+      }
+      if (!currentUser) {
+        alert("🔒 請先登入 LINE 帳號後再進行操作！");
+        return false;
+      }
+      return true;
     }
 
     // --- 4. GOOGLE SHEETS / GAS API SYNC ---
@@ -1224,7 +1277,7 @@
           return isEnded;
         }
         if (currentFilter === "my") {
-          return evt.attendees.some(u => u.userId === currentUser.userId);
+          return currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
         }
         return true; // "all"
       });
@@ -1241,7 +1294,7 @@
       filteredEvents.forEach(evt => {
         const isEnded = new Date(evt.datetime) < new Date();
         const isFull = evt.maxAttendees > 0 && evt.attendees.length >= evt.maxAttendees;
-        const isAttending = evt.attendees.some(u => u.userId === currentUser.userId);
+        const isAttending = currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
         
         let tagClass = "tag-open";
         let tagText = "報名中";
@@ -1306,6 +1359,8 @@
     // --- 8. NOTICE BOARD HANDLERS ---
     document.getElementById("form-edit-notice").addEventListener("submit", (e) => {
       e.preventDefault();
+      if (!ensureLoggedIn()) return;
+
       const text = document.getElementById("input-notice-text").value.trim();
       if (!text) return;
 
@@ -1421,8 +1476,10 @@ ${pageUrl}`;
       });
     }
 
-    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
+    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION (LOGIN GUARDED) ---
     function toggleRSVP(eventId) {
+      if (!ensureLoggedIn()) return;
+
       const evt = eventsData.find(e => e.id === eventId);
       if (!evt) return;
 
@@ -1493,9 +1550,10 @@ ${pageUrl}`;
       };
     }
 
-    // --- 13. EVENT CREATION ---
+    // --- 13. EVENT CREATION (LOGIN GUARDED) ---
     document.getElementById("form-create-event").addEventListener("submit", (e) => {
       e.preventDefault();
+      if (!ensureLoggedIn()) return;
 
       const customHostName = document.getElementById("input-host-name").value.trim();
 
@@ -1547,6 +1605,7 @@ ${pageUrl}`;
     // --- 15. EDIT EVENT SUBMISSION LOGIC ---
     document.getElementById("form-edit-event").addEventListener("submit", (e) => {
       e.preventDefault();
+      if (!ensureLoggedIn()) return;
       
       if (!activeEventId) return;
       const evt = eventsData.find(e => e.id === activeEventId);
@@ -1644,6 +1703,7 @@ ${pageUrl}`;
       }
 
       document.getElementById("btn-trigger-edit").onclick = () => {
+        if (!ensureLoggedIn()) return;
         closeModal("modal-detail");
         
         document.getElementById("edit-title").value = evt.title;
@@ -1684,6 +1744,7 @@ ${mentionsText}
       };
 
       document.getElementById("btn-save-host").onclick = () => {
+        if (!ensureLoggedIn()) return;
         const newHostName = document.getElementById("detail-host-input").value.trim();
         if (newHostName && newHostName !== evt.hostName) {
           evt.hostName = newHostName;
@@ -1703,6 +1764,7 @@ ${mentionsText}
       };
 
       document.getElementById("btn-delete-event").onclick = () => {
+        if (!ensureLoggedIn()) return;
         if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
           eventsData = eventsData.filter(e => e.id !== eventId);
           saveLocalEvents();
@@ -1727,7 +1789,7 @@ ${mentionsText}
     function renderDevProfiles() {
       const container = document.getElementById("dev-profiles-container");
       container.innerHTML = DEV_PROFILES.map(prof => `
-        <div class="dev-card ${prof.userId === currentUser.userId ? 'active' : ''}" onclick="switchDevProfile('${prof.userId}')">
+        <div class="dev-card ${currentUser && prof.userId === currentUser.userId ? 'active' : ''}" onclick="switchDevProfile('${prof.userId}')">
           <img src="${prof.pictureUrl}" width="20" height="20" style="border-radius:50%; vertical-align:middle; margin-right:4px;">
           ${escapeHtml(prof.displayName)}
         </div>
@@ -1738,6 +1800,7 @@ ${mentionsText}
       const target = DEV_PROFILES.find(p => p.userId === userId);
       if (target) {
         currentUser = target;
+        localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
         updateUserUI();
         renderDevProfiles();
         renderEvents();
@@ -1748,9 +1811,10 @@ ${mentionsText}
     // --- 18. EVENT LISTENERS ---
     function setupEventListeners() {
       document.getElementById("fab-add-event").onclick = () => {
+        if (!ensureLoggedIn()) return;
         const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
         document.getElementById("input-datetime").value = formatDateForInput(tomorrow, "19:00");
-        document.getElementById("input-host-name").value = currentUser.displayName;
+        document.getElementById("input-host-name").value = currentUser ? currentUser.displayName : "";
         openModal("modal-create");
       };
 
@@ -1759,6 +1823,7 @@ ${mentionsText}
       };
 
       document.getElementById("btn-edit-notice").onclick = () => {
+        if (!ensureLoggedIn()) return;
         document.getElementById("input-notice-text").value = noticeData.currentContent || "";
         openModal("modal-edit-notice");
       };
