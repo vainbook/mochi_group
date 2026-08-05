@@ -110,10 +110,17 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
       background: #f8fafc;
       padding: 8px 12px;
       border-radius: 10px;
       font-size: 13px;
+    }
+
+    .user-status-bar > div:first-child {
+      flex: 1 1 140px;
+      min-width: 0;
     }
 
     .user-name {
@@ -837,7 +844,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-06T00:30:14+08:00">v260806.0030</time>
+          <time class="version-label" datetime="2026-08-06T00:47:33+08:00">v260806.0047</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -848,6 +855,7 @@
           <span id="current-name" class="user-name">載入中...</span>
         </div>
         <button id="btn-login-action" class="dev-btn" style="display:inline-block; border-color:var(--line-green); color:var(--line-green);">LINE 登入</button>
+        <button id="btn-admin-mode" class="dev-btn" type="button" style="display:inline-block;">管理員模式</button>
         <button id="btn-dev-toggle" class="dev-btn">測試切換身分</button>
       </div>
     </header>
@@ -1109,6 +1117,28 @@
     </div>
   </div>
 
+  <!-- Modal: Admin mode password -->
+  <div id="modal-admin-mode" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-admin-mode">
+    <div class="modal-box" style="height:auto; max-height:90vh; max-width:380px; border-radius:20px;">
+      <div class="modal-header">
+        <span id="title-admin-mode" class="modal-title-text">開啟管理員模式</span>
+        <button class="modal-close" data-close="modal-admin-mode" aria-label="關閉管理員模式視窗">關閉</button>
+      </div>
+      <form id="form-admin-mode">
+        <div class="modal-form-body" style="padding-bottom:18px;">
+          <label class="form-label" for="input-admin-password">管理員密碼</label>
+          <input type="password" id="input-admin-password" class="line-input" autocomplete="current-password" required>
+          <div class="form-help">開啟後可刪除任何人的活動；關閉或重新載入網頁後會自動退出。</div>
+          <div id="admin-mode-error" class="form-help" style="display:none; color:#dc2626; margin-top:8px;"></div>
+        </div>
+        <div class="modal-footer" style="display:flex; gap:10px;">
+          <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-admin-mode">取消</button>
+          <button id="btn-admin-submit" type="submit" class="line-btn btn-join" style="flex:1.5;">驗證並開啟</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal: DEV Profile Switcher -->
   <div id="modal-dev-profile" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-dev-profile">
     <div class="modal-box">
@@ -1138,7 +1168,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0030",
+      APP_VERSION: "v260806.0047",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbxVPHws_s3yazs06n7tSPRqktRZawEK7B9tyHSQJIn7QIwXVivrS3GRZElqpU6Q4iOiZw/exec",
@@ -1158,6 +1188,8 @@
     ];
 
     let currentUser = null;
+    let currentUserCanDeleteAnyEvent = false;
+    let currentAdminPassword = "";
     let isAuthVerified = false;
     let isDevMode = false;
     let isLiffReady = false;
@@ -1332,6 +1364,10 @@
         hostUser.userId &&
         String(hostUser.userId) === String(currentUser.userId)
       );
+    }
+
+    function canCurrentUserDeleteEvent(evt) {
+      return isCurrentUserHost(evt) || currentUserCanDeleteAnyEvent;
     }
 
     function addHistoryLog(evt, actionText, actionType = "activity") {
@@ -1666,6 +1702,8 @@
       const loginBtn = document.getElementById("btn-login-action");
 
       currentUser = null;
+      currentUserCanDeleteAnyEvent = false;
+      currentAdminPassword = "";
       isAuthVerified = false;
       isLiffReady = false;
       updateUserUI();
@@ -1741,11 +1779,112 @@
     }
 
     function updateUserUI() {
+      const adminButton = document.getElementById("btn-admin-mode");
       if (currentUser) {
-        document.getElementById("current-name").innerText = currentUser.displayName;
+        document.getElementById("current-name").innerText = currentUser.displayName +
+          (currentUserCanDeleteAnyEvent ? "（管理員）" : "");
+        adminButton.disabled = false;
+        adminButton.innerText = currentUserCanDeleteAnyEvent ? "退出管理員" : "管理員模式";
+        adminButton.style.borderColor = currentUserCanDeleteAnyEvent ? "var(--line-green)" : "";
+        adminButton.style.color = currentUserCanDeleteAnyEvent ? "var(--line-green-dark)" : "";
       } else {
         document.getElementById("current-name").innerText = "未登入成員";
+        adminButton.disabled = true;
+        adminButton.innerText = "管理員模式";
       }
+    }
+
+    async function verifyAdminPassword(password) {
+      if (isDevMode) {
+        return { verified: password === "test1234", configured: true };
+      }
+      if (!CONFIG.GAS_API_URL) return { verified: false, configured: false };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      try {
+        const requestUrl = new URL(CONFIG.GAS_API_URL);
+        requestUrl.searchParams.set("_ts", String(Date.now()));
+        const response = await fetch(requestUrl.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            action: "verifyAdminPassword",
+            actorUserId: currentUser.userId,
+            actorName: currentUser.displayName,
+            adminPassword: password,
+            clientVersion: CONFIG.APP_VERSION
+          }),
+          redirect: "follow",
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!response.ok) return { verified: false, configured: true };
+        const data = await response.json();
+        return {
+          verified: data && data.status === "success" && data.canDeleteAnyEvent === true,
+          configured: data && data.isAdminPasswordConfigured === true
+        };
+      } catch (error) {
+        console.warn("Admin password check failed:", error);
+        return { verified: false, configured: true, connectionError: true };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    async function submitAdminModePassword(event) {
+      event.preventDefault();
+      if (!ensureLoggedIn()) return;
+
+      const input = document.getElementById("input-admin-password");
+      const errorText = document.getElementById("admin-mode-error");
+      const submitButton = document.getElementById("btn-admin-submit");
+      const password = input.value;
+      errorText.style.display = "none";
+      submitButton.disabled = true;
+      submitButton.innerText = "驗證中...";
+
+      const result = await verifyAdminPassword(password);
+      submitButton.disabled = false;
+      submitButton.innerText = "驗證並開啟";
+
+      if (result.verified) {
+        currentAdminPassword = password;
+        currentUserCanDeleteAnyEvent = true;
+        input.value = "";
+        closeModal("modal-admin-mode");
+        updateUserUI();
+        renderEvents();
+        alert("管理員模式已開啟。");
+        return;
+      }
+
+      if (!result.configured) {
+        errorText.innerText = "尚未在 GAS 設定管理員密碼。";
+      } else if (result.connectionError) {
+        errorText.innerText = "無法連線驗證，請稍後再試。";
+      } else {
+        errorText.innerText = "密碼不正確。";
+      }
+      errorText.style.display = "block";
+      input.select();
+    }
+
+    function toggleAdminMode() {
+      if (!ensureLoggedIn()) return;
+      if (currentUserCanDeleteAnyEvent) {
+        currentUserCanDeleteAnyEvent = false;
+        currentAdminPassword = "";
+        updateUserUI();
+        renderEvents();
+        alert("已退出管理員模式。");
+        return;
+      }
+      document.getElementById("input-admin-password").value = "";
+      document.getElementById("admin-mode-error").style.display = "none";
+      openModal("modal-admin-mode");
+      setTimeout(() => document.getElementById("input-admin-password").focus(), 80);
     }
 
     function ensureLoggedIn() {
@@ -1885,6 +2024,9 @@
           mutationId: payload.mutationId || `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           actorUserId: payload.actorUserId || currentUser?.userId || "",
           actorName: payload.actorName || currentUser?.displayName || "",
+          ...(payload.action === "deleteEvent" && currentUserCanDeleteAnyEvent
+            ? { adminPassword: currentAdminPassword }
+            : {}),
           clientVersion: CONFIG.APP_VERSION
         };
         const requestUrl = new URL(CONFIG.GAS_API_URL);
@@ -2598,6 +2740,7 @@ ${pageUrl}`;
       const formattedTime = getEventTimeText(evt);
       const maxCap = getMaxAttendees(evt);
       const isHost = isCurrentUserHost(evt);
+      const canDelete = canCurrentUserDeleteEvent(evt);
 
       document.getElementById("detail-title").innerText = evt.title;
       document.getElementById("detail-time").innerText = formattedTime;
@@ -2712,12 +2855,12 @@ ${memberDetails}
       };
 
       const deleteBtn = document.getElementById("btn-delete-event");
-      if (isHost) {
+      if (canDelete) {
         deleteBtn.style.display = "block";
         deleteBtn.onclick = async () => {
           if (!ensureLoggedIn()) return;
-          if (!isCurrentUserHost(evt)) {
-            alert("只有目前主揪可以刪除活動！");
+          if (!canCurrentUserDeleteEvent(evt)) {
+            alert("只有目前主揪或管理員可以刪除活動！");
             return;
           }
           if (confirm(`確定要刪除活動「${evt.title}」嗎？此操作不可複原。`)) {
@@ -2820,6 +2963,8 @@ ${memberDetails}
       const target = DEV_PROFILES.find(p => p.userId === userId);
       if (target) {
         currentUser = target;
+        currentUserCanDeleteAnyEvent = false;
+        currentAdminPassword = "";
         isAuthVerified = true;
         localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
         updateUserUI();
@@ -2849,6 +2994,9 @@ ${memberDetails}
       document.getElementById("btn-dev-toggle").onclick = () => {
         openModal("modal-dev-profile");
       };
+
+      document.getElementById("btn-admin-mode").onclick = toggleAdminMode;
+      document.getElementById("form-admin-mode").addEventListener("submit", submitAdminModePassword);
 
       document.getElementById("btn-export-ended").onclick = () => {
         exportEndedEvents();

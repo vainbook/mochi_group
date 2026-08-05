@@ -14,6 +14,8 @@ const APP_CONFIG = Object.freeze({
   AUDIT_SHEET: "AuditLog",
   STATUS_ACTIVE: "active",
   STATUS_DELETED: "deleted",
+  ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
+  ADMIN_PASSWORD_SALT_PROPERTY: "ADMIN_PASSWORD_SALT",
   LOCK_TIMEOUT_MS: 15000,
   SCHEMA_VERSION: "2"
 });
@@ -67,8 +69,32 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("活動布告欄")
     .addItem("初始化／修復表格", "setupProject")
+    .addItem("設定管理員密碼", "setAdminPassword")
     .addItem("顯示表格設計", "showSchemaInfo")
     .addToUi();
+}
+
+function setAdminPassword() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    "設定管理員密碼",
+    "請輸入至少 8 個字元的密碼。密碼只會以雜湊後的形式保存，不會寫入網頁或 GitHub。",
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+
+  const password = String(response.getResponseText() || "");
+  if (password.length < 8) {
+    ui.alert("密碼至少需要 8 個字元。");
+    return;
+  }
+
+  const salt = Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperties({
+    [APP_CONFIG.ADMIN_PASSWORD_SALT_PROPERTY]: salt,
+    [APP_CONFIG.ADMIN_PASSWORD_HASH_PROPERTY]: hashAdminPassword_(password, salt)
+  });
+  ui.alert("管理員密碼已設定。回到網頁點「管理員模式」後輸入此密碼即可啟用。");
 }
 
 function setupProject() {
@@ -134,6 +160,16 @@ function doPost(e) {
   try {
     lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
     const payload = parsePayload_(e);
+
+    if (payload.action === "verifyAdminPassword") {
+      return jsonOutput_({
+        status: "success",
+        canDeleteAnyEvent: verifyAdminPassword_(payload.adminPassword),
+        isAdminPasswordConfigured: isAdminPasswordConfigured_(),
+        serverTime: new Date().toISOString()
+      });
+    }
+
     const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
     const auditSheet = getRequiredSheet_(APP_CONFIG.AUDIT_SHEET);
 
@@ -425,7 +461,7 @@ function softDeleteEvent_(eventsSheet, auditSheet, payload) {
   const eventId = requireText_(payload.eventId || payload.id, "缺少 eventId");
   const found = requireEvent_(eventsSheet, eventId);
   const eventItem = found.event;
-  assertHostPermission_(eventItem, String(payload.actorUserId || payload.deletedByUserId || ""));
+  assertDeletePermission_(eventItem, payload);
 
   if (isDeletedEvent_(eventItem)) {
     return { eventId: eventId, deleted: true, alreadyDeleted: true };
@@ -774,6 +810,50 @@ function assertHostPermission_(eventItem, actorUserId) {
   if (!actorUserId || !hostUserId || String(actorUserId) !== hostUserId) {
     throw new Error("只有目前主揪可以執行此操作。");
   }
+}
+
+function assertDeletePermission_(eventItem, payload) {
+  const actorUserId = String(payload.actorUserId || payload.deletedByUserId || "");
+  if (verifyAdminPassword_(payload.adminPassword)) return;
+  assertHostPermission_(eventItem, actorUserId);
+}
+
+function isAdminPasswordConfigured_() {
+  const properties = PropertiesService.getScriptProperties();
+  return Boolean(
+    properties.getProperty(APP_CONFIG.ADMIN_PASSWORD_SALT_PROPERTY) &&
+    properties.getProperty(APP_CONFIG.ADMIN_PASSWORD_HASH_PROPERTY)
+  );
+}
+
+function verifyAdminPassword_(password) {
+  const candidate = String(password || "");
+  if (!candidate) return false;
+  const properties = PropertiesService.getScriptProperties();
+  const salt = properties.getProperty(APP_CONFIG.ADMIN_PASSWORD_SALT_PROPERTY) || "";
+  const expectedHash = properties.getProperty(APP_CONFIG.ADMIN_PASSWORD_HASH_PROPERTY) || "";
+  if (!salt || !expectedHash) return false;
+  return constantTimeEquals_(hashAdminPassword_(candidate, salt), expectedHash);
+}
+
+function hashAdminPassword_(password, salt) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(salt) + ":" + String(password),
+    Utilities.Charset.UTF_8
+  );
+  return bytes.map(byte => ((byte + 256) % 256).toString(16).padStart(2, "0")).join("");
+}
+
+function constantTimeEquals_(left, right) {
+  const a = String(left || "");
+  const b = String(right || "");
+  let mismatch = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (a.charCodeAt(index) || 0) ^ (b.charCodeAt(index) || 0);
+  }
+  return mismatch === 0;
 }
 
 function appendAudit_(sheet, payload, logData) {
