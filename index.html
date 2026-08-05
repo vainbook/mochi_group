@@ -322,7 +322,7 @@
       object-fit: cover;
     }
 
-    /* Card Buttons Grid (按鈕尺寸調小巧精緻) */
+    /* Card Buttons Grid (按鈕小巧化) */
     .card-actions {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
@@ -332,8 +332,8 @@
 
     .line-btn {
       font-family: var(--font-line);
-      padding: 6px 10px; /* 縮小按鈕內距 */
-      font-size: 13px;  /* 縮小按鈕字體 */
+      padding: 6px 10px;
+      font-size: 13px;
       font-weight: 700;
       border: none;
       border-radius: 8px;
@@ -405,7 +405,7 @@
       color: #7f1d1d;
     }
 
-    /* Floating Action Button (FAB) Group (純文字，無 Icon) */
+    /* Floating Action Button (FAB) Group */
     .fab-group {
       position: fixed;
       bottom: 20px;
@@ -457,7 +457,7 @@
       background: #e6a600;
     }
 
-    /* Native Full Screen Sheet Modal (根治手機鍵盤遮擋與卡住問題) */
+    /* Native Full Screen Sheet Modal */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -543,7 +543,6 @@
       color: #0f172a;
     }
 
-    /* 極致流暢的滾動區，預留 90px 底部空間，確保最後一格永遠拉得出來 */
     .modal-form-body {
       flex: 1 1 auto;
       overflow-y: scroll;
@@ -735,7 +734,7 @@
 
   </div>
 
-  <!-- Floating Action Buttons Group (純文字，無圖示) -->
+  <!-- Floating Action Buttons Group -->
   <div class="fab-group">
     <button id="btn-broadcast-all" class="fab-btn fab-broadcast">
       <span>一鍵宣傳</span>
@@ -785,7 +784,7 @@
     </div>
   </div>
 
-  <!-- Modal: Create Event (純防卡死順暢拉動版) -->
+  <!-- Modal: Create Event -->
   <div id="modal-create" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
@@ -984,7 +983,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (UI OPTIMIZED & NO-ICON FAB)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (SIMPLIFIED COPIED TEXT)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1074,7 +1073,6 @@
       });
     });
 
-    // 解決手機輸入框被鍵盤擠壓卡住的自動滾動增強
     function setupInputFocusScroll() {
       document.querySelectorAll("input, textarea").forEach(el => {
         el.addEventListener("focus", () => {
@@ -1324,7 +1322,7 @@
       return escapeHtml(locationStr);
     }
 
-    // --- 7. RENDER EVENTS & CARDS (按鈕小巧化) ---
+    // --- 7. RENDER EVENTS & CARDS ---
     function renderNoticeBoard() {
       document.getElementById("notice-text-content").innerText = noticeData.currentContent || "目前尚無公告。";
       document.getElementById("notice-author-info").innerText = `由 ${noticeData.lastAuthor || '管理員'} 發布`;
@@ -1460,7 +1458,7 @@
       renderNoticeBoard();
       closeModal("modal-edit-notice");
 
-      const noticeShareText = `📌【群組最新重要公告】📌\n----------------------------------\n${text}\n----------------------------------\n由 ${currentUser.displayName} 發布於 ${nowStr}`;
+      const noticeShareText = `📌【群組最新重要公告】\n${text}\n由 ${currentUser.displayName} 發布於 ${nowStr}`;
       safeCopyText(noticeShareText);
 
       document.getElementById("alert-copied-text").innerText = noticeShareText;
@@ -1490,21 +1488,17 @@
         });
         const capacityStr = `${evt.attendees.length}${evt.maxAttendees > 0 ? '/' + evt.maxAttendees : ''} 人`;
         
-        return `${idx + 1}️⃣【${evt.title}】
-⏰ 時間：${formattedTime}
-📍 地點：${evt.location || '線上 / 待定'}
-👥 目前人數：${capacityStr} (🔥熱烈報名中)`;
+        return `${idx + 1}. 【${evt.title}】
+時間：${formattedTime}
+地點：${evt.location || '線上 / 待定'}
+目前人數：${capacityStr}`;
       }).join("\n\n");
 
       const broadcastText = 
-`📢【群組熱門活動總通報】📢
-小夥伴們！以下是目前開放報名中的活動，歡迎點擊連結線上報名唷👇
-
-=============================
+`📢【群組熱門活動總通報】
 ${eventBlocks}
-=============================
 
-👉 點此線上報名 / 檢視即時名冊：
+👉 點此線上報名：
 ${pageUrl}`;
 
       safeCopyText(broadcastText);
@@ -1532,7 +1526,7 @@ ${pageUrl}`;
         return `[${yyyy}-${mm}-${dd}] ${evt.title} (${evt.location || '線上 / 待定'})`;
       });
 
-      const exportText = `📋【已過期活動歷史紀錄】\n=============================\n` + exportLines.join("\n");
+      const exportText = `📋【已過期活動歷史紀錄】\n` + exportLines.join("\n");
 
       safeCopyText(exportText);
       document.getElementById("alert-copied-text").innerText = exportText;
@@ -1550,11 +1544,11 @@ ${pageUrl}`;
       if (isEnded) return;
 
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
-      let actionText = "";
+      let actionType = "";
 
       if (existingIdx >= 0) {
         evt.attendees.splice(existingIdx, 1);
-        actionText = "已取消參加";
+        actionType = "cancel";
         evt.history = evt.history || [];
         evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "取消了參加報名" });
       } else {
@@ -1563,7 +1557,7 @@ ${pageUrl}`;
           return;
         }
         evt.attendees.push(currentUser);
-        actionText = "已成功報名參加";
+        actionType = "join";
         evt.history = evt.history || [];
         evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "報名參加了活動" });
       }
@@ -1578,11 +1572,11 @@ ${pageUrl}`;
       });
 
       renderEvents();
-      triggerAutoCopyAndAlert(evt, actionText);
+      triggerAutoCopyAndAlert(evt, actionType);
     }
 
-    // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
-    function triggerAutoCopyAndAlert(evt, actionHeadline) {
+    // --- 12. AUTO-COPY SINGLE EVENT TRIGGER (極簡格式，無虛線，主題+日期+報名人) ---
+    function triggerAutoCopyAndAlert(evt, actionType) {
       const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
         month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
       });
@@ -1590,14 +1584,22 @@ ${pageUrl}`;
       const pageUrl = getShareableUrl();
       const attendeeNames = evt.attendees.map(u => u.displayName).join(", ");
       
+      let headline = "";
+      if (actionType === "join") {
+        headline = `已報名【${evt.title}】`;
+      } else if (actionType === "cancel") {
+        headline = `已取消【${evt.title}】`;
+      } else if (actionType === "create") {
+        headline = `已創立【${evt.title}】`;
+      } else {
+        headline = `已更新【${evt.title}】`;
+      }
+
       const textToCopy = 
-`💬【群組活動通報：${evt.title}】 (${actionHeadline})
-----------------------------------
-⏰ 時間：${formattedTime}
-📍 地點：${evt.location || '線上 / 待定'}
-💰 費用：${evt.fee}
-👑 主揪：${evt.hostName || evt.hostUser?.displayName || '無'}
-👥 已報名名冊：${attendeeNames || '尚無'} (${evt.attendees.length}${evt.maxAttendees > 0 ? '/' + evt.maxAttendees : ''}人)
+`${headline}
+主題：${evt.title}
+日期：${formattedTime}
+報名人：${attendeeNames || '尚無'}
 
 👉 點此線上報名：
 ${pageUrl}`;
@@ -1640,7 +1642,7 @@ ${pageUrl}`;
       closeModal("modal-create");
       document.getElementById("form-create-event").reset();
 
-      triggerAutoCopyAndAlert(newEvent, "創立新活動！");
+      triggerAutoCopyAndAlert(newEvent, "create");
     });
 
     // --- 14. GOOGLE CALENDAR GENERATOR ---
@@ -1714,7 +1716,7 @@ ${pageUrl}`;
 
       openDetailModal(evt.id);
 
-      triggerAutoCopyAndAlert(evt, "編輯更新了活動內容！");
+      triggerAutoCopyAndAlert(evt, "update");
     });
 
     // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE ---
@@ -1783,13 +1785,9 @@ ${pageUrl}`;
 
         const mentionsText = evt.attendees.map(u => `@${u.displayName}`).join(" ");
         const mentionNoticeText = 
-`🏷️【活動成員提醒：${evt.title}】🏷️
-----------------------------------
-⏰ 時間：${formattedTime}
-📍 地點：${evt.location || '線上 / 待定'}
-
-成員小夥伴看過來👇
-${mentionsText}
+`🏷️【活動成員提醒：${evt.title}】
+時間：${formattedTime}
+成員：${mentionsText}
 
 各位記得準時出席活動唷！`;
 
@@ -1818,7 +1816,6 @@ ${mentionsText}
         }
       };
 
-      // 🗑️ 刪除活動（同步刪除 Google Sheet 欄位修正）
       document.getElementById("btn-delete-event").onclick = () => {
         if (!ensureLoggedIn()) return;
         if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
