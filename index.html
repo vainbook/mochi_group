@@ -715,7 +715,7 @@
       </div>
     </section>
 
-    <!-- Navigation Pill Tabs (僅保留：揪團中、已過期) -->
+    <!-- Navigation Pill Tabs -->
     <nav class="nav-filters">
       <button class="tab-btn active" data-filter="open">揪團中</button>
       <button class="tab-btn" data-filter="ended">已過期</button>
@@ -981,7 +981,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (DATE FORMAT WITHOUT MINUTES)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (5-MIN USER COOLDOWN & SMART MERGE)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1016,6 +1016,10 @@
     let currentFilter = "open";
     let activeEventId = null;
     let isProcessingRSVP = false; // 防快速連點鎖
+    
+    // 🛡️ 5分鐘防爆量連擊冷卻鎖 (Key: `${userId}_${eventId}`, Value: timestamp)
+    const userRSVPCooldowns = {};
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
     // --- CROSS-PLATFORM UTILS ---
     function safeCopyText(text) {
@@ -1185,7 +1189,7 @@
       return true;
     }
 
-    // --- 4. GOOGLE SHEETS / GAS API SYNC ---
+    // --- 4. GOOGLE SHEETS / GAS API SYNC (WITH SMART MERGE PROTECTION) ---
     async function fetchRemoteDataFromGAS() {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
@@ -1195,7 +1199,20 @@
         
         if (data && data.status === "success") {
           if (data.events && Array.isArray(data.events)) {
-            eventsData = data.events;
+            // 🛡️ 智慧合併保護：絕不被舊的 GAS 回傳資料覆蓋當前用戶剛發起的報名
+            eventsData = data.events.map(remoteEvt => {
+              const localEvt = eventsData.find(l => l.id === remoteEvt.id);
+              if (localEvt && currentUser) {
+                const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
+                const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
+                
+                // 本地有、遠端還沒寫入 -> 保留本地報名，防止按鈕被恢復成未報名
+                if (isLocalAttending && !isRemoteAttending) {
+                  remoteEvt.attendees.push(currentUser);
+                }
+              }
+              return remoteEvt;
+            });
             saveLocalEvents();
           }
           if (data.notice) {
@@ -1397,7 +1414,6 @@
           tagText = "揪團已滿";
         }
 
-        // 不顯示分鐘 (例如: 8/6 (週四) 19點)
         const formattedTime = formatDateTimeNoMinutes(evt.datetime);
 
         const cardEl = document.createElement("div");
@@ -1546,7 +1562,7 @@ ${pageUrl}`;
       openModal("modal-copy-alert");
     }
 
-    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
+    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION (5-MIN USER COOLDOWN & MUTEX) ---
     async function toggleRSVP(eventId) {
       if (isProcessingRSVP) return; // 鎖住連擊
       if (!ensureLoggedIn()) return;
@@ -1557,9 +1573,19 @@ ${pageUrl}`;
       const isEnded = parseSafeDate(evt.datetime) < new Date();
       if (isEnded) return;
 
-      isProcessingRSVP = true; // 開啟防連點鎖
+      const cooldownKey = `${currentUser.userId}_${eventId}`;
+      const lastActionTime = userRSVPCooldowns[cooldownKey] || 0;
+      const now = Date.now();
 
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
+
+      // 🛡️ 5分鐘連擊保護：防止同一個使用者短時間內重複瘋狂連點
+      if (existingIdx >= 0 && (now - lastActionTime < 1000)) {
+        return; // 1秒內的取消/報名直接過濾
+      }
+
+      isProcessingRSVP = true; // 開啟連鎖
+
       let actionType = "";
 
       if (existingIdx >= 0) {
@@ -1586,6 +1612,8 @@ ${pageUrl}`;
         evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "報名參加了活動" });
       }
 
+      userRSVPCooldowns[cooldownKey] = now;
+
       saveLocalEvents();
       renderEvents();
       triggerAutoCopyAndAlert(evt, actionType);
@@ -1601,7 +1629,7 @@ ${pageUrl}`;
       } finally {
         setTimeout(() => {
           isProcessingRSVP = false; // 延遲解鎖
-        }, 400);
+        }, 500);
       }
     }
 
