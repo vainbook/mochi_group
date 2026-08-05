@@ -766,7 +766,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-05T23:04:07+08:00">v260805.2304</time>
+          <time class="version-label" datetime="2026-08-05T23:31:11+08:00">v260805.2331</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1054,10 +1054,10 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260805.2304",
+      APP_VERSION: "v260805.2331",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
-      GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec",
+      GAS_API_URL: "https://script.google.com/macros/s/AKfycbxVPHws_s3yazs06n7tSPRqktRZawEK7B9tyHSQJIn7QIwXVivrS3GRZElqpU6Q4iOiZw/exec",
       VERSION_MANIFEST_URL: "version.json",
       DATA_SYNC_INTERVAL_MS: 12000,
       VERSION_CHECK_INTERVAL_MS: 60000,
@@ -1670,12 +1670,19 @@
       const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       try {
+        const requestPayload = {
+          ...payload,
+          mutationId: payload.mutationId || `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          actorUserId: payload.actorUserId || currentUser?.userId || "",
+          actorName: payload.actorName || currentUser?.displayName || "",
+          clientVersion: CONFIG.APP_VERSION
+        };
         const requestUrl = new URL(CONFIG.GAS_API_URL);
         requestUrl.searchParams.set("_ts", String(Date.now()));
         const res = await fetch(requestUrl.toString(), {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(requestPayload),
           redirect: "follow",
           cache: "no-store",
           signal: controller.signal
@@ -2024,6 +2031,7 @@ ${pageUrl}`;
 
       sendPostToGAS({
         action: "toggleRSVP",
+        rsvpAction: actionType,
         eventId: evt.id,
         userId: currentUser.userId,
         displayName: currentUser.displayName,
@@ -2098,7 +2106,7 @@ ${pageUrl}`;
 
       eventsData.push(newEvent);
       saveLocalEvents();
-      sendPostToGAS({ action: "saveEvent", ...newEvent });
+      sendPostToGAS({ action: "saveEvent", eventAction: "create", ...newEvent });
 
       renderEvents();
       closeModal("modal-create");
@@ -2168,7 +2176,7 @@ ${pageUrl}`;
       addHistoryLog(evt, `更新活動：${changes.join("、")}`, "update");
 
       saveLocalEvents();
-      sendPostToGAS({ action: "saveEvent", ...evt });
+      sendPostToGAS({ action: "saveEvent", eventAction: "update", ...evt });
 
       renderEvents();
       closeModal("modal-edit");
@@ -2259,7 +2267,7 @@ ${pageUrl}`;
         addHistoryLog(evt, `將主揪交棒給「${newHostName}」`, "handoff");
 
         saveLocalEvents();
-        sendPostToGAS({ action: "saveEvent", ...evt });
+        sendPostToGAS({ action: "saveEvent", eventAction: "handoff", ...evt });
         renderEvents();
         openDetailModal(evt.id);
         alert("主揪已完成交棒，你現在可以取消參加此活動。");
@@ -2367,7 +2375,8 @@ ${pageUrl}`;
               action: "deleteEvent",
               eventId: eventId,
               softDelete: true,
-              ...deletedEvent
+              ...deletedEvent,
+              eventAction: "delete"
             });
 
             if (!wasSent) {
