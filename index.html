@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>💬 LINE 群組活動布告欄</title>
   
   <!-- LINE LIFF SDK -->
@@ -333,7 +333,7 @@
     .line-btn {
       font-family: var(--font-line);
       padding: 9px 12px;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       border: none;
       border-radius: 10px;
@@ -457,7 +457,7 @@
       background: #e6a600;
     }
 
-    /* Modal Overlay & Box */
+    /* Modal Overlay & Box (Optimized for Mobile Keyboards) */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -468,12 +468,19 @@
       backdrop-filter: blur(4px);
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-end; /* 手機端靠底顯示，防遮擋 */
       z-index: 1000;
-      padding: 16px;
+      padding: 0;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
+    }
+
+    @media (min-width: 600px) {
+      .modal-overlay {
+        align-items: center;
+        padding: 16px;
+      }
     }
 
     .modal-overlay.active {
@@ -483,13 +490,22 @@
 
     .modal-box {
       width: 100%;
-      max-width: 480px;
-      max-height: 90vh;
+      max-width: 500px;
+      max-height: 85vh;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       background: #ffffff;
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      border-radius: 20px 20px 0 0;
+      padding: 20px 18px 30px 18px;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    @media (min-width: 600px) {
+      .modal-box {
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      }
     }
 
     .modal-title {
@@ -508,10 +524,10 @@
       background: #f1f5f9;
       border: none;
       color: #64748b;
-      width: 28px;
-      height: 28px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: bold;
       cursor: pointer;
       display: flex;
@@ -524,7 +540,7 @@
       color: #0f172a;
     }
 
-    /* Form Inputs */
+    /* Form Inputs (font-size 16px prevents iOS Safari auto-zoom) */
     .form-group {
       margin-bottom: 14px;
     }
@@ -545,7 +561,7 @@
       padding: 12px;
       border-radius: 10px;
       font-family: var(--font-line);
-      font-size: 15px;
+      font-size: 16px; /* 關鍵：防 iOS 自動放大網頁畫面 */
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
@@ -762,8 +778,8 @@
           <input type="datetime-local" id="input-datetime" class="line-input" required>
         </div>
         <div class="form-group">
-          <label class="form-label">活動地點 * (輸入網址會自動轉為超連結)</label>
-          <input type="text" id="input-location" class="line-input" placeholder="例如：台北市立羽球館 或 貼上 Google Maps 網址" required>
+          <label class="form-label">活動地點 (選填，可輸入地址或貼上 Google Maps 網址)</label>
+          <input type="text" id="input-location" class="line-input" placeholder="例如：台北市立羽球館 或 貼上地圖網址 (選填)">
         </div>
         <div class="form-group">
           <label class="form-label">主揪 / 主辦人名稱</label>
@@ -806,8 +822,8 @@
           <input type="datetime-local" id="edit-datetime" class="line-input" required>
         </div>
         <div class="form-group">
-          <label class="form-label">活動地點 *</label>
-          <input type="text" id="edit-location" class="line-input" required>
+          <label class="form-label">活動地點 (選填)</label>
+          <input type="text" id="edit-location" class="line-input">
         </div>
         <div class="form-group">
           <label class="form-label">主揪名稱</label>
@@ -943,8 +959,8 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      LIFF_ID: "YOUR_LIFF_ID_HERE",
-      GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec", // 貼上你的 Google Apps Script 網頁應用程式網址
+      LIFF_ID: "YOUR_LIFF_ID_HERE", // 請貼上你的 LINE Developers LIFF ID
+      GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec",
       STORAGE_KEY: "line_events_v6",
       NOTICE_STORAGE_KEY: "line_top_notice_v1"
     };
@@ -1023,7 +1039,7 @@
 
     // --- 4. GOOGLE SHEETS / GAS API SYNC ---
     async function fetchRemoteDataFromGAS() {
-      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL === "YOUR_GAS_API_URL_HERE") return;
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
       try {
         const res = await fetch(CONFIG.GAS_API_URL);
@@ -1048,7 +1064,7 @@
     }
 
     async function sendPostToGAS(payload) {
-      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL === "YOUR_GAS_API_URL_HERE") return;
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
       try {
         await fetch(CONFIG.GAS_API_URL, {
@@ -1163,7 +1179,7 @@
 
     // --- 6. LOCATION URL AUTO-LINK FORMATTER ---
     function formatLocationHtml(locationStr) {
-      if (!locationStr) return "未指定";
+      if (!locationStr) return "線上 / 待定";
       
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       if (urlRegex.test(locationStr)) {
@@ -1348,7 +1364,7 @@
         
         return `${idx + 1}️⃣【${evt.title}】
 ⏰ 時間：${formattedTime}
-📍 地點：${evt.location}
+📍 地點：${evt.location || '線上 / 待定'}
 👥 目前人數：${capacityStr} (🔥熱烈報名中)`;
       }).join("\n\n");
 
@@ -1392,7 +1408,7 @@ ${pageUrl}`;
         const yyyy = dt.getFullYear();
         const mm = String(dt.getMonth() + 1).padStart(2, '0');
         const dd = String(dt.getDate()).padStart(2, '0');
-        return `[${yyyy}-${mm}-${dd}] ${evt.title} (${evt.location})`;
+        return `[${yyyy}-${mm}-${dd}] ${evt.title} (${evt.location || '線上 / 待定'})`;
       });
 
       const exportText = `📋【已過期活動歷史紀錄】\n=============================\n` + exportLines.join("\n");
@@ -1458,7 +1474,7 @@ ${pageUrl}`;
 `💬【群組活動通報：${evt.title}】 (${actionHeadline})
 ----------------------------------
 ⏰ 時間：${formattedTime}
-📍 地點：${evt.location}
+📍 地點：${evt.location || '線上 / 待定'}
 💰 費用：${evt.fee}
 👑 主揪：${evt.hostName || evt.hostUser?.displayName || '無'}
 👥 已報名名冊：${attendeeNames || '尚無'} (${evt.attendees.length}${evt.maxAttendees > 0 ? '/' + evt.maxAttendees : ''}人)
@@ -1487,7 +1503,7 @@ ${pageUrl}`;
         id: "evt_" + Date.now(),
         title: document.getElementById("input-title").value.trim(),
         datetime: document.getElementById("input-datetime").value,
-        location: document.getElementById("input-location").value.trim(),
+        location: document.getElementById("input-location").value.trim() || "線上 / 待定",
         fee: document.getElementById("input-fee").value.trim() || "免費",
         maxAttendees: parseInt(document.getElementById("input-max").value) || 0,
         description: document.getElementById("input-desc").value.trim(),
@@ -1522,7 +1538,7 @@ ${pageUrl}`;
 
       const title = encodeURIComponent(`[活動] ${evt.title}`);
       const details = encodeURIComponent(`主揪: ${evt.hostName || evt.hostUser?.displayName}\n費用: ${evt.fee}\n說明: ${evt.description}`);
-      const location = encodeURIComponent(evt.location);
+      const location = encodeURIComponent(evt.location || "線上 / 待定");
       const dates = `${formatGCalDate(startDt)}/${formatGCalDate(endDt)}`;
 
       return `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
@@ -1538,7 +1554,7 @@ ${pageUrl}`;
 
       const newTitle = document.getElementById("edit-title").value.trim();
       const newDatetime = document.getElementById("edit-datetime").value;
-      const newLocation = document.getElementById("edit-location").value.trim();
+      const newLocation = document.getElementById("edit-location").value.trim() || "線上 / 待定";
       const newHostName = document.getElementById("edit-host-name").value.trim();
       const newFee = document.getElementById("edit-fee").value.trim() || "免費";
       const newMax = parseInt(document.getElementById("edit-max").value) || 0;
@@ -1632,7 +1648,7 @@ ${pageUrl}`;
         
         document.getElementById("edit-title").value = evt.title;
         document.getElementById("edit-datetime").value = evt.datetime;
-        document.getElementById("edit-location").value = evt.location;
+        document.getElementById("edit-location").value = evt.location || "";
         document.getElementById("edit-host-name").value = evt.hostName || "";
         document.getElementById("edit-fee").value = evt.fee || "";
         document.getElementById("edit-max").value = evt.maxAttendees || 0;
@@ -1652,7 +1668,7 @@ ${pageUrl}`;
 `🏷️【活動成員提醒：${evt.title}】🏷️
 ----------------------------------
 ⏰ 時間：${formattedTime}
-📍 地點：${evt.location}
+📍 地點：${evt.location || '線上 / 待定'}
 
 成員小夥伴看過來👇
 ${mentionsText}
