@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>💬 LINE 群組活動布告欄</title>
+  <title>LINE 群組活動布告欄</title>
   
   <!-- LINE LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -170,7 +170,12 @@
 
     .clock-spinner {
       display: inline-block;
-      animation: clock-rotate 2s linear infinite;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #cbd5e1;
+      border-top-color: var(--line-green);
+      border-radius: 50%;
+      animation: clock-rotate 0.8s linear infinite;
     }
 
     @keyframes clock-rotate {
@@ -357,6 +362,18 @@
       gap: 4px;
       transition: all 0.15s;
       min-height: 44px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(6, 199, 85, 0.16);
+    }
+
+    .line-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.72;
+      transform: none;
+    }
+
+    .rsvp-action:active {
+      transform: scale(0.97);
     }
 
     .btn-join {
@@ -542,10 +559,12 @@
       background: #f1f5f9;
       border: none;
       color: #64748b;
-      width: 44px;
+      width: auto;
+      min-width: 56px;
       height: 44px;
-      border-radius: 50%;
-      font-size: 16px;
+      padding: 0 12px;
+      border-radius: 999px;
+      font-size: 13px;
       font-weight: bold;
       cursor: pointer;
       display: flex;
@@ -598,13 +617,37 @@
       font-size: 16px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
-      min-height: 44px;
     }
 
-    input[type="datetime-local"].line-input {
-      min-height: 46px;
-      color: #0f172a;
-      background-color: #f8fafc;
+    .line-input {
+      display: block;
+      max-width: 100%;
+      height: 48px;
+      min-height: 48px;
+    }
+
+    .datetime-picker-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(68px, 0.8fr) minmax(68px, 0.8fr);
+      gap: 8px;
+      align-items: end;
+    }
+
+    .datetime-picker-field {
+      min-width: 0;
+    }
+
+    .datetime-picker-label {
+      display: block;
+      margin-bottom: 5px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .datetime-picker-grid input[type="date"],
+    .datetime-picker-grid select {
+      width: 100%;
       cursor: pointer;
     }
 
@@ -617,6 +660,30 @@
     .line-textarea {
       min-height: 100px;
       resize: vertical;
+    }
+
+    .host-transfer-panel {
+      margin-top: 10px;
+      padding: 10px;
+      background: #ffffff;
+      border: 1px solid #dbe3ea;
+      border-radius: 10px;
+    }
+
+    .host-transfer-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+    }
+
+    .host-transfer-row .line-input {
+      min-width: 0;
+      height: 44px;
+      min-height: 44px;
+      font-size: 14px;
+      padding: 8px 10px;
     }
 
     /* History Log List */
@@ -698,10 +765,10 @@
     <header class="line-header">
       <div class="header-top">
         <h1 class="brand-title">
-          <span>💬 群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-05T22:08:58+08:00">v260805.2208</time>
+          <span>群組活動布告欄</span>
+          <time class="version-label" datetime="2026-08-05T22:41:57+08:00">v260805.2241</time>
         </h1>
-        <span id="login-badge" class="sync-status-badge">🔄 同步中...</span>
+        <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
       
       <div class="user-status-bar">
@@ -709,14 +776,14 @@
           <span style="color: #64748b;">登入身份：</span>
           <span id="current-name" class="user-name">載入中...</span>
         </div>
-        <button id="btn-login-action" class="dev-btn" style="display:inline-block; border-color:var(--line-green); color:var(--line-green);">🔑 LINE 登入</button>
-        <button id="btn-dev-toggle" class="dev-btn">⚙️ 測試切換身分</button>
+        <button id="btn-login-action" class="dev-btn" style="display:inline-block; border-color:var(--line-green); color:var(--line-green);">LINE 登入</button>
+        <button id="btn-dev-toggle" class="dev-btn">測試切換身分</button>
       </div>
     </header>
 
     <!-- Central Sync Clock Prompt Notice (中間時鐘提醒) -->
     <div id="sync-clock-notice" class="sync-clock-prompt">
-      <span class="clock-spinner">⏳</span>
+      <span class="clock-spinner" aria-hidden="true"></span>
       <span id="sync-clock-text">正在連線雲端同步最新活動...</span>
     </div>
 
@@ -726,7 +793,7 @@
       <button class="tab-btn" data-filter="ended">已過期</button>
       
       <button id="btn-export-ended" class="export-btn" style="display: none;">
-        📋 匯出歷史紀錄
+        匯出歷史紀錄
       </button>
     </nav>
 
@@ -752,7 +819,7 @@
     <div class="modal-box">
       <div class="modal-header">
         <span id="title-create-event" class="modal-title-text">發起揪團</span>
-        <button class="modal-close" data-close="modal-create" aria-label="關閉發起揪團視窗">✕</button>
+        <button class="modal-close" data-close="modal-create" aria-label="關閉發起揪團視窗">關閉</button>
       </div>
       <form id="form-create-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
@@ -761,16 +828,31 @@
             <input type="text" id="input-title" class="line-input" placeholder="例如：週末羽球同樂會" required>
           </div>
           <div class="form-group">
-            <label class="form-label" for="input-datetime">日期與時間 * (點擊選擇)</label>
-            <input type="datetime-local" id="input-datetime" class="line-input" required>
+            <div class="form-label">日期與時間 *</div>
+            <div class="datetime-picker-grid">
+              <label class="datetime-picker-field">
+                <span class="datetime-picker-label">日期</span>
+                <input type="date" id="input-date" class="line-input" required>
+              </label>
+              <label class="datetime-picker-field">
+                <span class="datetime-picker-label">時</span>
+                <select id="input-hour" class="line-input" required aria-label="活動開始小時"></select>
+              </label>
+              <label class="datetime-picker-field">
+                <span class="datetime-picker-label">分</span>
+                <select id="input-minute" class="line-input" required aria-label="活動開始分鐘">
+                  <option value="00">00</option>
+                  <option value="15">15</option>
+                  <option value="30">30</option>
+                  <option value="45">45</option>
+                </select>
+              </label>
+              <input type="hidden" id="input-datetime">
+            </div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="input-location">活動地點 (選填，可輸入地址或貼上地圖網址)</label>
-            <input type="text" id="input-location" class="line-input" placeholder="例如：台北市立羽球館 (選填)">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="input-host-name">主揪 / 主辦人名稱</label>
-            <input type="text" id="input-host-name" class="line-input" placeholder="預設為當前 LINE 暱稱（可修改）">
+            <label class="form-label" for="input-location">活動地點（預設待定，可輸入地址或貼上地圖網址）</label>
+            <input type="text" id="input-location" class="line-input" value="待定" placeholder="例如：台北市立羽球館">
           </div>
           <div class="form-group">
             <label class="form-label" for="input-fee">活動費用</label>
@@ -798,7 +880,7 @@
     <div class="modal-box">
       <div class="modal-header">
         <span id="title-edit-event" class="modal-title-text">編輯活動內容</span>
-        <button class="modal-close" data-close="modal-edit" aria-label="關閉活動編輯視窗">✕</button>
+        <button class="modal-close" data-close="modal-edit" aria-label="關閉活動編輯視窗">關閉</button>
       </div>
       <form id="form-edit-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
@@ -807,16 +889,31 @@
             <input type="text" id="edit-title" class="line-input" required>
           </div>
           <div class="form-group">
-            <label class="form-label" for="edit-datetime">日期與時間 *</label>
-            <input type="datetime-local" id="edit-datetime" class="line-input" required>
+            <div class="form-label">日期與時間 *</div>
+            <div class="datetime-picker-grid">
+              <label class="datetime-picker-field">
+                <span class="datetime-picker-label">日期</span>
+                <input type="date" id="edit-date" class="line-input" required>
+              </label>
+              <label class="datetime-picker-field">
+                <span class="datetime-picker-label">時</span>
+                <select id="edit-hour" class="line-input" required aria-label="活動開始小時"></select>
+              </label>
+              <label class="datetime-picker-field">
+                <span class="datetime-picker-label">分</span>
+                <select id="edit-minute" class="line-input" required aria-label="活動開始分鐘">
+                  <option value="00">00</option>
+                  <option value="15">15</option>
+                  <option value="30">30</option>
+                  <option value="45">45</option>
+                </select>
+              </label>
+              <input type="hidden" id="edit-datetime">
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label" for="edit-location">活動地點 (選填)</label>
             <input type="text" id="edit-location" class="line-input">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-host-name">主揪名稱</label>
-            <input type="text" id="edit-host-name" class="line-input">
           </div>
           <div class="form-group">
             <label class="form-label" for="edit-fee">活動費用</label>
@@ -846,32 +943,39 @@
         <span id="detail-title" class="modal-title-text">活動詳情</span>
         <div style="display:flex; gap:6px;">
           <button id="btn-trigger-edit" class="line-btn btn-edit" style="padding:4px 8px; font-size:12px;">編輯內容</button>
-          <button class="modal-close" data-close="modal-detail" aria-label="關閉活動詳情視窗">✕</button>
+          <button class="modal-close" data-close="modal-detail" aria-label="關閉活動詳情視窗">關閉</button>
         </div>
       </div>
       
       <div class="modal-form-body">
         <div style="background:#f8fafc; border-radius:12px; padding:12px; margin-bottom:14px; border:1px solid #e2e8f0;">
-          <div style="margin-bottom:8px;"><strong>⏰ 時間：</strong><span id="detail-time">--</span></div>
-          <div style="margin-bottom:8px;"><strong>📍 地點：</strong><span id="detail-location">--</span></div>
-          <div style="margin-bottom:8px;"><strong>💰 費用：</strong><span id="detail-fee">--</span></div>
+          <div style="margin-bottom:8px;"><strong>時間：</strong><span id="detail-time">--</span></div>
+          <div style="margin-bottom:8px;"><strong>地點：</strong><span id="detail-location">--</span></div>
+          <div style="margin-bottom:8px;"><strong>費用：</strong><span id="detail-fee">--</span></div>
           
-          <!-- Editable Host Section -->
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label for="detail-host-input"><strong>👑 主揪：</strong></label>
-            <input type="text" id="detail-host-input" class="line-input" style="padding:4px 8px; font-size:13px; width:150px; height:32px;">
-            <button id="btn-save-host" class="line-btn btn-join" style="padding:4px 8px; font-size:12px;">儲存</button>
+          <div>
+            <strong>主揪：</strong><span id="detail-host-name">--</span>
+            <div id="host-transfer-panel" class="host-transfer-panel" style="display:none;">
+              <label class="form-label" for="detail-host-transfer-select" style="margin-bottom:0;">交棒給已報名成員</label>
+              <div class="host-transfer-row">
+                <select id="detail-host-transfer-select" class="line-input" aria-label="選擇新主揪">
+                  <option value="">請選擇成員</option>
+                </select>
+                <button id="btn-transfer-host" class="line-btn btn-join" type="button">確認交棒</button>
+              </div>
+              <div id="host-transfer-help" style="margin-top:6px; color:#64748b; font-size:12px; line-height:1.5;"></div>
+            </div>
           </div>
         </div>
 
         <div style="margin-bottom:14px;">
-          <div style="font-weight:700; color:#475569; margin-bottom:4px;">📝 具體活動說明：</div>
+          <div style="font-weight:700; color:#475569; margin-bottom:4px;">具體活動說明：</div>
           <div id="detail-desc" style="background:#f8fafc; padding:12px; border-radius:10px; border:1px solid #e2e8f0; white-space:pre-wrap; color:#334155;">--</div>
         </div>
 
         <div style="margin-bottom:14px;">
           <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-            <span>👥 已報名成員名冊 (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
+            <span>已報名成員名冊 (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
             <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
               @標記成員
             </button>
@@ -883,8 +987,8 @@
 
         <!-- History Update Logs -->
         <div>
-          <div style="font-weight:700; color:#475569; margin-bottom:6px;">📜 編輯與更新歷史紀錄：</div>
-          <div id="detail-history-list" class="history-box">
+          <div style="font-weight:700; color:#475569; margin-bottom:6px;">活動完整紀錄（<span id="detail-history-count">0</span>）：</div>
+          <div id="detail-history-list" class="history-box" aria-live="polite">
             <!-- History log items -->
           </div>
         </div>
@@ -904,7 +1008,6 @@
   <!-- Minimal Modal: Auto-Copy Simplified Notification -->
   <div id="modal-copy-alert" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-copy-alert">
     <div class="modal-box" style="text-align:center; height:auto; max-height:90vh; max-width:380px; padding:24px 20px; border-radius:20px;">
-      <div style="font-size:42px; margin-bottom:8px;">📋✅</div>
       <div id="title-copy-alert" style="font-size:18px; color:#0f172a; font-weight:800; margin-bottom:6px;">
         已複製報名資訊！
       </div>
@@ -926,8 +1029,8 @@
   <div id="modal-dev-profile" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-dev-profile">
     <div class="modal-box">
       <div class="modal-header">
-        <span id="title-dev-profile" class="modal-title-text">⚙️ 切換測試身分</span>
-        <button class="modal-close" data-close="modal-dev-profile" aria-label="關閉測試身分視窗">✕</button>
+        <span id="title-dev-profile" class="modal-title-text">切換測試身分</span>
+        <button class="modal-close" data-close="modal-dev-profile" aria-label="關閉測試身分視窗">關閉</button>
       </div>
       <div class="modal-form-body">
         <p style="font-size:13px; color:#64748b; margin-bottom:10px;">
@@ -974,10 +1077,7 @@
 
     let currentFilter = "open";
     let activeEventId = null;
-    let isProcessingRSVP = false;
-    
-    // 🛡️ 5分鐘連擊保護
-    const userRSVPCooldowns = {};
+    const processingRSVPEventIds = new Set();
 
     // --- CROSS-PLATFORM UTILS ---
     function safeCopyText(text) {
@@ -1010,15 +1110,57 @@
       return d;
     }
 
-    function formatDateTimeNoMinutes(dateStr) {
+    function formatDateTime(dateStr) {
       const d = parseSafeDate(dateStr);
       const month = d.getMonth() + 1;
       const date = d.getDate();
-      const hour = d.getHours();
+      const hour = String(d.getHours()).padStart(2, "0");
+      const minute = String(d.getMinutes()).padStart(2, "0");
       const weekdays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
       const weekday = weekdays[d.getDay()];
 
-      return `${month}/${date} (${weekday}) ${hour}點`;
+      return `${month}/${date} (${weekday}) ${hour}:${minute}`;
+    }
+
+    function snapDateTimeToQuarter(dateValue) {
+      if (!dateValue) return "";
+      const d = parseSafeDate(dateValue);
+      if (isNaN(d.getTime())) return dateValue;
+      d.setSeconds(0, 0);
+      d.setMinutes(Math.round(d.getMinutes() / 15) * 15);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const hour = String(d.getHours()).padStart(2, "0");
+      const minute = String(d.getMinutes()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}T${hour}:${minute}`;
+    }
+
+    function setDateTimePickerValue(prefix, dateValue) {
+      const snappedValue = snapDateTimeToQuarter(dateValue);
+      if (!snappedValue || !snappedValue.includes("T")) return;
+      const [datePart, timePart] = snappedValue.split("T");
+      const [hourPart, minutePart] = timePart.split(":");
+      document.getElementById(`${prefix}-date`).value = datePart;
+      document.getElementById(`${prefix}-hour`).value = hourPart;
+      document.getElementById(`${prefix}-minute`).value = minutePart;
+      document.getElementById(`${prefix}-datetime`).value = snappedValue;
+    }
+
+    function getDateTimePickerValue(prefix) {
+      const datePart = document.getElementById(`${prefix}-date`).value;
+      const hourPart = document.getElementById(`${prefix}-hour`).value;
+      const minutePart = document.getElementById(`${prefix}-minute`).value;
+      if (!datePart || hourPart === "" || minutePart === "") return "";
+      const dateTimeValue = `${datePart}T${hourPart}:${minutePart}`;
+      document.getElementById(`${prefix}-datetime`).value = dateTimeValue;
+      return dateTimeValue;
+    }
+
+    function normalizeLocation(locationValue) {
+      const location = String(locationValue || "").trim();
+      if (!location || ["線上 / 待定", "線上/待定", "線上／待定"].includes(location)) return "待定";
+      return location;
     }
 
     function getMaxAttendees(evt) {
@@ -1027,15 +1169,61 @@
       return isNaN(num) ? 0 : num;
     }
 
+    function getEventHostUser(evt) {
+      if (!evt) return null;
+      if (evt.hostUser && evt.hostUser.userId) return evt.hostUser;
+      const matchingAttendees = (evt.attendees || []).filter(attendee =>
+        attendee &&
+        attendee.userId &&
+        attendee.displayName &&
+        String(attendee.displayName) === String(evt.hostName || "")
+      );
+      return matchingAttendees.length === 1 ? matchingAttendees[0] : null;
+    }
+
     function isCurrentUserHost(evt) {
+      const hostUser = getEventHostUser(evt);
       return Boolean(
         isAuthVerified &&
         currentUser &&
-        evt &&
-        evt.hostUser &&
-        evt.hostUser.userId &&
-        String(evt.hostUser.userId) === String(currentUser.userId)
+        hostUser &&
+        hostUser.userId &&
+        String(hostUser.userId) === String(currentUser.userId)
       );
+    }
+
+    function addHistoryLog(evt, actionText, actionType = "activity") {
+      if (!evt) return null;
+      const now = new Date();
+      const logEntry = {
+        id: `log_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+        author: currentUser?.displayName || "系統",
+        authorUserId: currentUser?.userId || "",
+        time: getFormattedNow(),
+        timestamp: now.toISOString(),
+        type: actionType,
+        action: actionText
+      };
+      if (!Array.isArray(evt.history)) evt.history = [];
+      evt.history.unshift(logEntry);
+      return logEntry;
+    }
+
+    function mergeHistoryLogs(remoteHistory, localHistory) {
+      const merged = [];
+      const seen = new Set();
+      [...(remoteHistory || []), ...(localHistory || [])].forEach(log => {
+        if (!log || !log.action) return;
+        const key = log.id || `${log.author || ""}|${log.time || ""}|${log.action}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push(log);
+      });
+      merged.sort((a, b) => {
+        if (!a.timestamp || !b.timestamp) return 0;
+        return String(b.timestamp).localeCompare(String(a.timestamp));
+      });
+      return merged;
     }
 
     function getShareableUrl() {
@@ -1091,14 +1279,15 @@
       isDevMode = checkDevModeVisibility();
       
       loadLocalData();
-      renderEvents(); // ⚡ 0.01 秒立刻渲染本地畫面
+      renderEvents(); // 立刻渲染本地畫面
 
-      updateSyncBadge("🔄 同步中...", false);
-      setSyncClockPrompt("syncing", "⏳ 正在連線雲端同步最新活動...");
+      updateSyncBadge("同步中...", false);
+      setSyncClockPrompt("syncing", "正在連線雲端同步最新活動...");
 
       setupEventListeners();
       renderDevProfiles();
       setupInputFocusScroll();
+      setupQuarterHourInputs();
 
       initLIFF();
       runInitialSync();
@@ -1107,7 +1296,7 @@
     async function runInitialSync() {
       // ponytail: 兩秒後先解除等待感，雲端仍在背景完成；未來可升級成可取消的同步工作列。
       const slowConnectionTimer = setTimeout(() => {
-        updateSyncBadge("📱 本機資料", false);
+        updateSyncBadge("本機資料", false);
         setSyncClockPrompt("hide");
       }, 2000);
 
@@ -1116,17 +1305,17 @@
         renderEvents();
 
         if (isSuccess) {
-          updateSyncBadge("✅ 已連動", true);
-          setSyncClockPrompt("done", "✅ 已成功連動最新雲端資料");
+          updateSyncBadge("已連動", true);
+          setSyncClockPrompt("done", "已成功連動最新雲端資料");
           setTimeout(() => setSyncClockPrompt("hide"), 1200);
         } else {
-          updateSyncBadge("⚠️ 離線資料", false);
+          updateSyncBadge("離線資料", false);
           setSyncClockPrompt("offline", "目前顯示本機資料，稍後重新開啟即可再同步");
           setTimeout(() => setSyncClockPrompt("hide"), 2400);
         }
       } catch (err) {
         console.warn("Initial sync warning:", err);
-        updateSyncBadge("⚠️ 離線資料", false);
+        updateSyncBadge("離線資料", false);
         setSyncClockPrompt("offline", "目前顯示本機資料，稍後重新開啟即可再同步");
         setTimeout(() => setSyncClockPrompt("hide"), 2400);
       } finally {
@@ -1135,12 +1324,25 @@
     }
 
     function setupInputFocusScroll() {
-      document.querySelectorAll("input, textarea").forEach(el => {
+      document.querySelectorAll("input, select, textarea").forEach(el => {
         el.addEventListener("focus", () => {
           setTimeout(() => {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
           }, 300);
         });
+      });
+    }
+
+    function setupQuarterHourInputs() {
+      ["input", "edit"].forEach(prefix => {
+        const hourSelect = document.getElementById(`${prefix}-hour`);
+        for (let hour = 0; hour < 24; hour += 1) {
+          const hourText = String(hour).padStart(2, "0");
+          const option = document.createElement("option");
+          option.value = hourText;
+          option.textContent = hourText;
+          hourSelect.append(option);
+        }
       });
     }
 
@@ -1250,17 +1452,17 @@
 
       if (!isAuthVerified || !currentUser) {
         if (isLiffReady && typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
-          if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
+          if (confirm("辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
             liff.login();
           }
         } else {
-          alert("🔒 LINE 登入服務尚未連線，請稍後再試！");
+          alert("LINE 登入服務尚未連線，請稍後再試！");
         }
         return false;
       }
 
       if (typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
-        if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
+        if (confirm("辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
           liff.login();
         }
         return false;
@@ -1288,8 +1490,9 @@
           const uniqueEventMap = new Map();
           data.events.forEach(remoteEvt => {
             if (!remoteEvt || !remoteEvt.id) return;
+            remoteEvt.location = normalizeLocation(remoteEvt.location);
             
-            // 🛡️ 容錯防崩潰解析 attendees
+            // 容錯防崩潰解析 attendees
             try {
               if (typeof remoteEvt.attendees === "string") {
                 remoteEvt.attendees = JSON.parse(remoteEvt.attendees);
@@ -1297,7 +1500,7 @@
             } catch(e) { remoteEvt.attendees = []; }
             if (!Array.isArray(remoteEvt.attendees)) remoteEvt.attendees = [];
 
-            // 🛡️ 容錯防崩潰解析 history
+            // 容錯防崩潰解析 history
             try {
               if (typeof remoteEvt.history === "string") {
                 remoteEvt.history = JSON.parse(remoteEvt.history);
@@ -1311,7 +1514,7 @@
               }
             } catch(e) { remoteEvt.hostUser = null; }
 
-            // 🛡️ 成員去重
+            // 成員去重
             const uniqueUserMap = new Map();
             remoteEvt.attendees.forEach(u => {
               if (u && u.userId) uniqueUserMap.set(u.userId, u);
@@ -1325,12 +1528,15 @@
 
           eventsData = cleanEvents.map(remoteEvt => {
             const localEvt = eventsData.find(l => l.id === remoteEvt.id);
-            if (localEvt && currentUser) {
-              const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
-              const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
-              
-              if (isLocalAttending && !isRemoteAttending) {
-                remoteEvt.attendees.push(currentUser);
+            if (localEvt) {
+              remoteEvt.history = mergeHistoryLogs(remoteEvt.history, localEvt.history);
+              if (currentUser) {
+                const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
+                const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
+
+                if (isLocalAttending && !isRemoteAttending) {
+                  remoteEvt.attendees.push(currentUser);
+                }
               }
             }
             return remoteEvt;
@@ -1349,6 +1555,8 @@
     }
 
     async function sendPostToGAS(payload) {
+      // 本機測試模式只驗證操作反應，不寫入正式資料。
+      if (isDevMode) return;
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
       const controller = new AbortController();
@@ -1375,6 +1583,10 @@
       if (stored) {
         try {
           eventsData = JSON.parse(stored);
+          if (!Array.isArray(eventsData)) throw new Error("Invalid local events");
+          eventsData.forEach(evt => {
+            evt.location = normalizeLocation(evt.location);
+          });
           return;
         } catch (e) {}
       }
@@ -1419,7 +1631,7 @@
     }
 
     function renderSafeLocation(container, locationValue) {
-      const locationText = String(locationValue || "線上 / 待定");
+      const locationText = normalizeLocation(locationValue);
       const match = locationText.match(/https?:\/\/[^\s]+/i);
       container.replaceChildren();
 
@@ -1443,7 +1655,7 @@
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.className = "location-link";
-      link.textContent = "📍 點擊開啟地圖連結";
+      link.textContent = "點擊開啟地圖連結";
       container.append(link);
 
       if (afterText) container.append(document.createTextNode(" " + afterText));
@@ -1483,7 +1695,7 @@
       if (filteredEvents.length === 0) {
         listEl.innerHTML = `
           <div style="background:#ffffff; border-radius:16px; padding:30px; text-align:center; color:#64748b; box-shadow:0 4px 14px rgba(0,0,0,0.08);">
-            <p style="font-size:16px; font-weight:bold;">💬 目前沒有相關活動記錄</p>
+            <p style="font-size:16px; font-weight:bold;">目前沒有相關活動記錄</p>
           </div>
         `;
         return;
@@ -1494,6 +1706,7 @@
         const maxCap = getMaxAttendees(evt);
         const isFull = maxCap > 0 && evt.attendees.length >= maxCap;
         const isAttending = currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
+        const isHost = isCurrentUserHost(evt);
         
         let tagClass = "tag-open";
         let tagText = "揪團中";
@@ -1506,7 +1719,7 @@
           tagText = "揪團已滿";
         }
 
-        const formattedTime = formatDateTimeNoMinutes(evt.datetime);
+        const formattedTime = formatDateTime(evt.datetime);
 
         const cardEl = document.createElement("div");
         cardEl.className = `event-card ${isEnded ? 'ended' : ''}`;
@@ -1514,6 +1727,8 @@
         let rsvpBtnHtml = "";
         if (isEnded) {
           rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
+        } else if (isAttending && isHost) {
+          rsvpBtnHtml = `<button class="line-btn btn-detail" disabled title="請先到詳情交棒給其他已報名成員">主揪請先交棒</button>`;
         } else if (isAttending) {
           rsvpBtnHtml = `<button class="line-btn btn-cancel rsvp-action">取消參加</button>`;
         } else if (isFull) {
@@ -1531,12 +1746,12 @@
           </div>
           
           <div class="card-info">
-            <div class="info-row"><span class="info-label">⏰ 時間：</span><span>${formattedTime}</span></div>
-            <div class="info-row"><span class="info-label">📍 地點：</span><span class="event-location"></span></div>
-            <div class="info-row"><span class="info-label">💰 費用：</span><span>${escapeHtml(evt.fee || "免費")}</span></div>
-            <div class="info-row"><span class="info-label">👑 主揪：</span><span>${escapeHtml(evt.hostName || evt.hostUser?.displayName || "無")}</span></div>
+            <div class="info-row"><span class="info-label">時間：</span><span>${formattedTime}</span></div>
+            <div class="info-row"><span class="info-label">地點：</span><span class="event-location"></span></div>
+            <div class="info-row"><span class="info-label">費用：</span><span>${escapeHtml(evt.fee || "免費")}</span></div>
+            <div class="info-row"><span class="info-label">主揪：</span><span>${escapeHtml(evt.hostName || evt.hostUser?.displayName || "無")}</span></div>
             <div class="info-row">
-              <span class="info-label">👥 人數：</span>
+              <span class="info-label">人數：</span>
               <span style="color:var(--line-green-dark); font-weight:bold;">${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人</span>
             </div>
           </div>
@@ -1576,21 +1791,21 @@
       const pageUrl = getShareableUrl();
 
       const eventBlocks = openEvents.map((evt, idx) => {
-        const formattedTime = formatDateTimeNoMinutes(evt.datetime);
+        const formattedTime = formatDateTime(evt.datetime);
         const maxCap = getMaxAttendees(evt);
         const capacityStr = `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人`;
         
         return `${idx + 1}. 【${evt.title}】
 時間：${formattedTime}
-地點：${evt.location || '線上 / 待定'}
+地點：${normalizeLocation(evt.location)}
 目前人數：${capacityStr}`;
       }).join("\n\n");
 
       const broadcastText = 
-`📢【群組熱門活動總通報】
+`【群組熱門活動總通報】
 ${eventBlocks}
 
-👉 點此線上報名：
+點此線上報名：
 ${pageUrl}`;
 
       safeCopyText(broadcastText);
@@ -1615,10 +1830,10 @@ ${pageUrl}`;
         const yyyy = dt.getFullYear();
         const mm = String(dt.getMonth() + 1).padStart(2, '0');
         const dd = String(dt.getDate()).padStart(2, '0');
-        return `[${yyyy}-${mm}-${dd}] ${evt.title} (${evt.location || '線上 / 待定'})`;
+        return `[${yyyy}-${mm}-${dd}] ${evt.title} (${normalizeLocation(evt.location)})`;
       });
 
-      const exportText = `📋【已過期活動歷史紀錄】\n` + exportLines.join("\n");
+      const exportText = `【已過期活動歷史紀錄】\n` + exportLines.join("\n");
 
       safeCopyText(exportText);
       document.getElementById("alert-copied-text").innerText = exportText;
@@ -1626,8 +1841,8 @@ ${pageUrl}`;
     }
 
     // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
-    async function toggleRSVP(eventId) {
-      if (isProcessingRSVP) return; // 鎖住連擊
+    function toggleRSVP(eventId) {
+      if (processingRSVPEventIds.has(eventId)) return;
       if (!ensureLoggedIn()) return;
 
       const evt = eventsData.find(e => e.id === eventId);
@@ -1636,30 +1851,22 @@ ${pageUrl}`;
       const isEnded = parseSafeDate(evt.datetime) < new Date();
       if (isEnded) return;
 
-      const cooldownKey = `${currentUser.userId}_${eventId}`;
-      const lastActionTime = userRSVPCooldowns[cooldownKey] || 0;
-      const now = Date.now();
-
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
-
-      if (existingIdx >= 0 && (now - lastActionTime < 1000)) {
-        return;
-      }
-
-      isProcessingRSVP = true; // 開啟連鎖
 
       let actionType = "";
 
       if (existingIdx >= 0) {
+        if (isCurrentUserHost(evt)) {
+          alert("主揪無法直接取消參加，請先到活動詳情將主揪交棒給其他已報名成員。");
+          return;
+        }
         evt.attendees.splice(existingIdx, 1);
         actionType = "cancel";
-        evt.history = evt.history || [];
-        evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "取消了參加報名" });
+        addHistoryLog(evt, "退出活動", "leave");
       } else {
         const maxCap = getMaxAttendees(evt);
         if (maxCap > 0 && evt.attendees.length >= maxCap) {
-          alert(`⚠️ 此活動揪團已滿（上限 ${maxCap} 人），無法再新增報名！`);
-          isProcessingRSVP = false;
+          alert(`此活動揪團已滿（上限 ${maxCap} 人），無法再新增報名！`);
           return;
         }
 
@@ -1669,39 +1876,36 @@ ${pageUrl}`;
         }
 
         actionType = "join";
-        evt.history = evt.history || [];
-        evt.history.unshift({ author: currentUser.displayName, time: getFormattedNow(), action: "報名參加了活動" });
+        addHistoryLog(evt, "報名參加活動", "join");
       }
 
-      userRSVPCooldowns[cooldownKey] = now;
+      // 每場活動只防止短時間雙擊，不再等待網路或鎖住整個頁面。
+      processingRSVPEventIds.add(eventId);
+      setTimeout(() => processingRSVPEventIds.delete(eventId), 450);
 
       saveLocalEvents();
       renderEvents();
       triggerAutoCopyAndAlert(evt, actionType);
 
-      try {
-        await sendPostToGAS({
-          action: "toggleRSVP",
-          eventId: evt.id,
-          userId: currentUser.userId,
-          displayName: currentUser.displayName,
-          pictureUrl: currentUser.pictureUrl
-        });
-      } finally {
-        setTimeout(() => {
-          isProcessingRSVP = false; // 延遲解鎖
-        }, 500);
-      }
+      sendPostToGAS({
+        action: "toggleRSVP",
+        eventId: evt.id,
+        userId: currentUser.userId,
+        displayName: currentUser.displayName,
+        pictureUrl: currentUser.pictureUrl,
+        history: evt.history,
+        historyEntry: evt.history[0]
+      });
     }
 
     // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
     function triggerAutoCopyAndAlert(evt, actionType) {
-      const formattedTime = formatDateTimeNoMinutes(evt.datetime);
+      const formattedTime = formatDateTime(evt.datetime);
 
       const pageUrl = getShareableUrl();
       
       if (actionType === "cancel") {
-        const cancelText = `已跳game【${evt.title}】`;
+        const cancelText = `取消參加${evt.title}活動`;
         safeCopyText(cancelText);
         document.getElementById("alert-copied-text").innerText = cancelText;
         openModal("modal-copy-alert");
@@ -1724,7 +1928,7 @@ ${pageUrl}`;
 日期：${formattedTime}
 報名人：${attendeeNames || '尚無'}
 
-👉 點此線上報名：
+點此線上報名：
 ${pageUrl}`;
 
       safeCopyText(textToCopy);
@@ -1738,24 +1942,22 @@ ${pageUrl}`;
       e.preventDefault();
       if (!ensureLoggedIn()) return;
 
-      const customHostName = document.getElementById("input-host-name").value.trim();
-
       const newEvent = {
         id: "evt_" + Date.now(),
         title: document.getElementById("input-title").value.trim(),
-        datetime: document.getElementById("input-datetime").value,
-        location: document.getElementById("input-location").value.trim() || "線上 / 待定",
+        datetime: getDateTimePickerValue("input"),
+        location: normalizeLocation(document.getElementById("input-location").value),
         fee: document.getElementById("input-fee").value.trim() || "免費",
         maxAttendees: parseInt(document.getElementById("input-max").value, 10) || 0,
         description: document.getElementById("input-desc").value.trim(),
-        hostName: customHostName || currentUser.displayName,
+        hostName: currentUser.displayName,
         hostUser: currentUser,
         createdAt: new Date().toISOString(),
         attendees: [currentUser],
-        history: [
-          { author: currentUser.displayName, time: getFormattedNow(), action: "創立了此活動" }
-        ]
+        history: []
       };
+
+      addHistoryLog(newEvent, "建立活動並成為主揪", "create");
 
       eventsData.push(newEvent);
       saveLocalEvents();
@@ -1779,7 +1981,7 @@ ${pageUrl}`;
 
       const title = encodeURIComponent(`[活動] ${evt.title}`);
       const details = encodeURIComponent(`主揪: ${evt.hostName || evt.hostUser?.displayName}\n費用: ${evt.fee}\n說明: ${evt.description}`);
-      const location = encodeURIComponent(evt.location || "線上 / 待定");
+      const location = encodeURIComponent(normalizeLocation(evt.location));
       const dates = `${formatGCalDate(startDt)}/${formatGCalDate(endDt)}`;
 
       return `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
@@ -1794,27 +1996,25 @@ ${pageUrl}`;
       const evt = eventsData.find(e => e.id === activeEventId);
       if (!evt) return;
       if (!isCurrentUserHost(evt)) {
-        alert("🔒 只有活動建立者可以編輯內容！");
+        alert("只有目前主揪可以編輯內容！");
         closeModal("modal-edit");
         return;
       }
 
       const newTitle = document.getElementById("edit-title").value.trim();
-      const newDatetime = document.getElementById("edit-datetime").value;
-      const newLocation = document.getElementById("edit-location").value.trim() || "線上 / 待定";
-      const newHostName = document.getElementById("edit-host-name").value.trim();
+      const newDatetime = getDateTimePickerValue("edit");
+      const newLocation = normalizeLocation(document.getElementById("edit-location").value);
       const newFee = document.getElementById("edit-fee").value.trim() || "免費";
       const newMax = parseInt(document.getElementById("edit-max").value, 10) || 0;
       const newDesc = document.getElementById("edit-desc").value.trim();
 
       let changes = [];
-      if (evt.title !== newTitle) changes.push(`名稱(${newTitle})`);
-      if (evt.datetime !== newDatetime) changes.push("時間");
-      if (evt.location !== newLocation) changes.push("地點");
-      if (evt.hostName !== newHostName) changes.push(`主揪(${newHostName})`);
-      if (evt.fee !== newFee) changes.push("費用");
-      if (evt.maxAttendees !== newMax) changes.push("人數");
-      if (evt.description !== newDesc) changes.push("補充說明");
+      if (evt.title !== newTitle) changes.push(`名稱改為「${newTitle}」`);
+      if (evt.datetime !== newDatetime) changes.push(`時間改為「${formatDateTime(newDatetime)}」`);
+      if (evt.location !== newLocation) changes.push(`地點改為「${newLocation}」`);
+      if (evt.fee !== newFee) changes.push(`費用改為「${newFee}」`);
+      if (getMaxAttendees(evt) !== newMax) changes.push(`人數上限改為「${newMax || "無限制"}」`);
+      if (evt.description !== newDesc) changes.push("修改補充說明");
 
       if (changes.length === 0) {
         closeModal("modal-edit");
@@ -1824,17 +2024,11 @@ ${pageUrl}`;
       evt.title = newTitle;
       evt.datetime = newDatetime;
       evt.location = newLocation;
-      evt.hostName = newHostName;
       evt.fee = newFee;
       evt.maxAttendees = newMax;
       evt.description = newDesc;
 
-      evt.history = evt.history || [];
-      evt.history.unshift({
-        author: currentUser.displayName,
-        time: getFormattedNow(),
-        action: `更新了：${changes.join("、")}`
-      });
+      addHistoryLog(evt, `更新活動：${changes.join("、")}`, "update");
 
       saveLocalEvents();
       sendPostToGAS({ action: "saveEvent", ...evt });
@@ -1853,7 +2047,7 @@ ${pageUrl}`;
       const evt = eventsData.find(e => e.id === eventId);
       if (!evt) return;
 
-      const formattedTime = formatDateTimeNoMinutes(evt.datetime);
+      const formattedTime = formatDateTime(evt.datetime);
       const maxCap = getMaxAttendees(evt);
       const isHost = isCurrentUserHost(evt);
 
@@ -1862,16 +2056,77 @@ ${pageUrl}`;
       renderSafeLocation(document.getElementById("detail-location"), evt.location);
       document.getElementById("detail-fee").innerText = evt.fee || "免費";
       
-      const hostInput = document.getElementById("detail-host-input");
-      const saveHostBtn = document.getElementById("btn-save-host");
       const editBtn = document.getElementById("btn-trigger-edit");
-      hostInput.value = evt.hostName || evt.hostUser?.displayName || "";
-      hostInput.readOnly = !isHost;
-      saveHostBtn.style.display = isHost ? "flex" : "none";
+      const hostUser = getEventHostUser(evt);
+      const hostDisplayName = evt.hostName || hostUser?.displayName || "未指定";
+      const transferPanel = document.getElementById("host-transfer-panel");
+      const transferSelect = document.getElementById("detail-host-transfer-select");
+      const transferBtn = document.getElementById("btn-transfer-host");
+      const transferHelp = document.getElementById("host-transfer-help");
+      document.getElementById("detail-host-name").innerText = hostDisplayName;
       editBtn.style.display = isHost ? "flex" : "none";
       document.getElementById("detail-desc").innerText = evt.description || "尚無補充說明。";
       document.getElementById("detail-capacity-text").innerText = 
         `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''}`;
+
+      transferPanel.style.display = isHost ? "block" : "none";
+      transferSelect.replaceChildren();
+      const placeholderOption = document.createElement("option");
+      placeholderOption.value = "";
+      placeholderOption.textContent = "請選擇成員";
+      transferSelect.append(placeholderOption);
+
+      const hostUserId = hostUser?.userId ? String(hostUser.userId) : "";
+      const transferCandidates = evt.attendees.filter(attendee =>
+        attendee && attendee.userId && String(attendee.userId) !== hostUserId
+      );
+      transferCandidates.forEach(attendee => {
+        const option = document.createElement("option");
+        option.value = String(attendee.userId);
+        option.textContent = String(attendee.displayName || "未命名成員");
+        transferSelect.append(option);
+      });
+
+      const hasTransferCandidate = transferCandidates.length > 0;
+      transferSelect.disabled = !hasTransferCandidate;
+      transferBtn.disabled = !hasTransferCandidate;
+      transferHelp.innerText = hasTransferCandidate
+        ? "交棒後，新主揪會取得編輯與刪除活動的權限；原主揪才可取消參加。"
+        : "目前沒有其他已報名成員，需有人報名後才能交棒。";
+
+      transferBtn.onclick = () => {
+        if (!ensureLoggedIn()) return;
+        if (!isCurrentUserHost(evt)) {
+          alert("只有目前主揪可以交棒！");
+          openDetailModal(evt.id);
+          return;
+        }
+
+        const newHost = evt.attendees.find(attendee =>
+          attendee && attendee.userId && String(attendee.userId) === String(transferSelect.value)
+        );
+        if (!newHost || String(newHost.userId) === hostUserId) {
+          alert("請選擇一位其他已報名成員交棒。");
+          return;
+        }
+
+        const newHostName = String(newHost.displayName || "未命名成員");
+        if (!confirm(`確定將主揪交棒給「${newHostName}」嗎？`)) return;
+
+        evt.hostUser = {
+          userId: newHost.userId,
+          displayName: newHostName,
+          pictureUrl: newHost.pictureUrl || ""
+        };
+        evt.hostName = newHostName;
+        addHistoryLog(evt, `將主揪交棒給「${newHostName}」`, "handoff");
+
+        saveLocalEvents();
+        sendPostToGAS({ action: "saveEvent", ...evt });
+        renderEvents();
+        openDetailModal(evt.id);
+        alert("主揪已完成交棒，你現在可以取消參加此活動。");
+      };
 
       const attendeesEl = document.getElementById("detail-attendees");
       if (evt.attendees.length === 0) {
@@ -1896,12 +2151,13 @@ ${pageUrl}`;
       }
 
       const historyEl = document.getElementById("detail-history-list");
+      document.getElementById("detail-history-count").innerText = String(evt.history?.length || 0);
       if (!evt.history || evt.history.length === 0) {
-        historyEl.innerHTML = `<div style="color:#94a3b8; font-size:12px;">尚無編修紀錄</div>`;
+        historyEl.innerHTML = `<div style="color:#94a3b8; font-size:12px;">尚無活動紀錄</div>`;
       } else {
         historyEl.innerHTML = evt.history.map(log => `
           <div class="history-item">
-            <span class="history-meta">👤 ${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>：${escapeHtml(log.action)}
+            <span class="history-meta">${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>：${escapeHtml(log.action)}
           </div>
         `).join("");
       }
@@ -1909,15 +2165,14 @@ ${pageUrl}`;
       editBtn.onclick = () => {
         if (!ensureLoggedIn()) return;
         if (!isCurrentUserHost(evt)) {
-          alert("🔒 只有活動建立者可以編輯內容！");
+          alert("只有目前主揪可以編輯內容！");
           return;
         }
         closeModal("modal-detail");
         
         document.getElementById("edit-title").value = evt.title;
-        document.getElementById("edit-datetime").value = evt.datetime;
-        document.getElementById("edit-location").value = evt.location || "";
-        document.getElementById("edit-host-name").value = evt.hostName || "";
+        setDateTimePickerValue("edit", evt.datetime);
+        document.getElementById("edit-location").value = normalizeLocation(evt.location);
         document.getElementById("edit-fee").value = evt.fee || "";
         document.getElementById("edit-max").value = evt.maxAttendees || 0;
         document.getElementById("edit-desc").value = evt.description || "";
@@ -1933,7 +2188,7 @@ ${pageUrl}`;
 
         const mentionsText = evt.attendees.map(u => `@${u.displayName}`).join(" ");
         const mentionNoticeText = 
-`🏷️【活動成員提醒：${evt.title}】
+`【活動成員提醒：${evt.title}】
 時間：${formattedTime}
 成員：${mentionsText}
 
@@ -1944,46 +2199,22 @@ ${pageUrl}`;
         openModal("modal-copy-alert");
       };
 
-      saveHostBtn.onclick = () => {
-        if (!ensureLoggedIn()) return;
-        if (!isCurrentUserHost(evt)) {
-          alert("🔒 只有活動建立者可以修改主揪名稱！");
-          return;
-        }
-        const newHostName = hostInput.value.trim();
-        if (newHostName && newHostName !== evt.hostName) {
-          evt.hostName = newHostName;
-          evt.history = evt.history || [];
-          evt.history.unshift({
-            author: currentUser.displayName,
-            time: getFormattedNow(),
-            action: `修改主揪為「${newHostName}」`
-          });
-          saveLocalEvents();
-          sendPostToGAS({ action: "saveEvent", ...evt });
-
-          renderEvents();
-          openDetailModal(evt.id);
-          alert("✅ 已更新主揪名稱！");
-        }
-      };
-
       const deleteBtn = document.getElementById("btn-delete-event");
       if (isHost) {
         deleteBtn.style.display = "block";
         deleteBtn.onclick = () => {
           if (!ensureLoggedIn()) return;
           if (!isCurrentUserHost(evt)) {
-            alert("🔒 只有活動建立者可以刪除活動！");
+            alert("只有目前主揪可以刪除活動！");
             return;
           }
-          if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可複原。`)) {
+          if (confirm(`確定要刪除活動「${evt.title}」嗎？此操作不可複原。`)) {
             eventsData = eventsData.filter(e => e.id !== eventId);
             saveLocalEvents();
             sendPostToGAS({ action: "deleteEvent", eventId: eventId });
             renderEvents();
             closeModal("modal-detail");
-            alert("✅ 已成功刪除活動！");
+            alert("已成功刪除活動！");
           }
         };
       } else {
@@ -2048,8 +2279,7 @@ ${pageUrl}`;
       document.getElementById("fab-add-event").onclick = () => {
         if (!ensureLoggedIn()) return;
         const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        document.getElementById("input-datetime").value = formatDateForInput(tomorrow, "19:00");
-        document.getElementById("input-host-name").value = currentUser ? currentUser.displayName : "";
+        setDateTimePickerValue("input", formatDateForInput(tomorrow, "19:00"));
         openModal("modal-create");
       };
 
