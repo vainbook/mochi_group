@@ -15,7 +15,7 @@ const APP_CONFIG = Object.freeze({
   STATUS_ACTIVE: "active",
   STATUS_DELETED: "deleted",
   LOCK_TIMEOUT_MS: 15000,
-  SCHEMA_VERSION: "1"
+  SCHEMA_VERSION: "2"
 });
 
 const EVENT_HEADERS = Object.freeze([
@@ -23,6 +23,8 @@ const EVENT_HEADERS = Object.freeze([
   "status",
   "title",
   "datetime",
+  "isFixedGroup",
+  "fixedTimeText",
   "location",
   "hostName",
   "hostUser",
@@ -30,6 +32,8 @@ const EVENT_HEADERS = Object.freeze([
   "maxAttendees",
   "description",
   "attendees",
+  "fixedAttendees",
+  "weeklyAttendees",
   "history",
   "createdAt",
   "updatedAt",
@@ -51,7 +55,13 @@ const AUDIT_HEADERS = Object.freeze([
   "details"
 ]);
 
-const JSON_EVENT_FIELDS = Object.freeze(["hostUser", "attendees", "history"]);
+const JSON_EVENT_FIELDS = Object.freeze([
+  "hostUser",
+  "attendees",
+  "fixedAttendees",
+  "weeklyAttendees",
+  "history"
+]);
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -92,6 +102,8 @@ function setupProject() {
 function showSchemaInfo() {
   const message = [
     "Events：保存活動目前狀態，status 為 active 或 deleted。",
+    "固定團：isFixedGroup 為 TRUE，固定時間保存在 fixedTimeText。",
+    "固定參與與本週參與分別保存在 fixedAttendees 與 weeklyAttendees。",
     "AuditLog：永久保存建立、報名、退出、編輯、交棒與刪除紀錄。",
     "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。"
   ].join("\n");
@@ -102,12 +114,13 @@ function doGet(e) {
   try {
     const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
     const includeDeleted = String((e && e.parameter && e.parameter.includeDeleted) || "") === "1";
+    const schemaReady = hasRequiredHeaders_(eventsSheet, EVENT_HEADERS);
     const events = readAllEvents_(eventsSheet)
       .filter(eventItem => includeDeleted || !isDeletedEvent_(eventItem));
 
     return jsonOutput_({
       status: "success",
-      schemaVersion: APP_CONFIG.SCHEMA_VERSION,
+      schemaVersion: schemaReady ? APP_CONFIG.SCHEMA_VERSION : "1",
       serverTime: new Date().toISOString(),
       events: events
     });
@@ -123,6 +136,12 @@ function doPost(e) {
     const payload = parsePayload_(e);
     const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
     const auditSheet = getRequiredSheet_(APP_CONFIG.AUDIT_SHEET);
+
+    const needsFixedGroupSchema = payload.participationType || payload.isFixedGroup === true ||
+      String(payload.isFixedGroup || "").toLowerCase() === "true";
+    if (needsFixedGroupSchema && !hasRequiredHeaders_(eventsSheet, EVENT_HEADERS)) {
+      throw new Error("固定團欄位尚未初始化，請先執行 setupProject()。");
+    }
 
     if (payload.mutationId && hasProcessedMutation_(auditSheet, payload.mutationId)) {
       return jsonOutput_({
@@ -182,7 +201,12 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
 
   if (existingEvent) {
     // 編輯活動只改活動內容，名單永遠以 GAS 目前資料為準，避免舊分頁覆蓋新報名。
-    normalizedEvent.attendees = normalizeUsers_(existingEvent.attendees);
+    normalizedEvent.isFixedGroup = existingEvent.isFixedGroup === true;
+    normalizedEvent.fixedAttendees = normalizeUsers_(existingEvent.fixedAttendees);
+    normalizedEvent.weeklyAttendees = normalizeUsers_(existingEvent.weeklyAttendees);
+    normalizedEvent.attendees = normalizedEvent.isFixedGroup
+      ? normalizeUsers_(normalizedEvent.fixedAttendees.concat(normalizedEvent.weeklyAttendees))
+      : normalizeUsers_(existingEvent.attendees);
     normalizedEvent.history = mergeHistoryLists_(existingEvent.history, payload.history);
 
     if (eventAction === "handoff") {
@@ -193,6 +217,14 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
       if (!newHostUserId || newHostUserId === getHostUserId_(existingEvent) || !isRegistered) {
         throw new Error("新主揪必須是另一位已報名成員。");
       }
+      if (normalizedEvent.isFixedGroup) {
+        const newHost = normalizedEvent.attendees.find(user => String(user.userId) === String(newHostUserId));
+        normalizedEvent.weeklyAttendees = normalizedEvent.weeklyAttendees.filter(user =>
+          String(user.userId) !== String(newHostUserId)
+        );
+        normalizedEvent.fixedAttendees = normalizeUsers_([newHost].concat(normalizedEvent.fixedAttendees));
+        normalizedEvent.attendees = normalizeUsers_(normalizedEvent.fixedAttendees.concat(normalizedEvent.weeklyAttendees));
+      }
     } else {
       // 一般編輯不可順便手動改主揪；交棒必須使用 handoff 動作。
       normalizedEvent.hostUser = existingEvent.hostUser;
@@ -200,7 +232,20 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
     }
   } else {
     const creatingHost = normalizeUser_(normalizedEvent.hostUser);
-    normalizedEvent.attendees = normalizeUsers_([creatingHost].concat(normalizedEvent.attendees || []));
+    if (normalizedEvent.isFixedGroup) {
+      normalizedEvent.fixedAttendees = normalizeUsers_([creatingHost].concat(normalizedEvent.fixedAttendees || []));
+      normalizedEvent.weeklyAttendees = normalizeUsers_(normalizedEvent.weeklyAttendees);
+      normalizedEvent.attendees = normalizeUsers_(normalizedEvent.fixedAttendees.concat(normalizedEvent.weeklyAttendees));
+      if (!normalizedEvent.fixedTimeText) throw new Error("固定團必須填寫固定時間。");
+    } else {
+      normalizedEvent.fixedAttendees = [];
+      normalizedEvent.weeklyAttendees = [];
+      normalizedEvent.attendees = normalizeUsers_([creatingHost].concat(normalizedEvent.attendees || []));
+    }
+  }
+
+  if (normalizedEvent.isFixedGroup && !normalizedEvent.fixedTimeText) {
+    throw new Error("固定團必須填寫固定時間。");
   }
 
   normalizedEvent.id = eventId;
@@ -241,6 +286,10 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
   const found = requireEvent_(eventsSheet, eventId);
   const eventItem = found.event;
   assertActiveEvent_(eventItem);
+
+  if (eventItem.isFixedGroup === true) {
+    return updateFixedGroupRsvp_(eventsSheet, auditSheet, found, payload, userId);
+  }
 
   const attendees = normalizeUsers_(eventItem.attendees);
   const existingIndex = attendees.findIndex(user => String(user.userId) === userId);
@@ -286,6 +335,88 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
     eventId: eventId,
     rsvpAction: intent,
     attendees: eventItem.attendees,
+    history: eventItem.history
+  };
+}
+
+function updateFixedGroupRsvp_(eventsSheet, auditSheet, found, payload, userId) {
+  const eventItem = found.event;
+  const participationType = ["fixed", "weekly"].includes(String(payload.participationType))
+    ? String(payload.participationType)
+    : "weekly";
+  const intent = ["join", "cancel"].includes(String(payload.rsvpAction))
+    ? String(payload.rsvpAction)
+    : "join";
+  const hostUserId = getHostUserId_(eventItem);
+
+  let fixedAttendees = normalizeUsers_(eventItem.fixedAttendees);
+  let weeklyAttendees = normalizeUsers_(eventItem.weeklyAttendees);
+  const wasInFixed = fixedAttendees.some(user => String(user.userId) === userId);
+  const wasInWeekly = weeklyAttendees.some(user => String(user.userId) === userId);
+  const wasRegistered = wasInFixed || wasInWeekly;
+
+  if (String(hostUserId) === userId && (intent === "cancel" || participationType === "weekly")) {
+    throw new Error("固定團主揪必須維持固定參與；如需退出請先交棒。");
+  }
+
+  if (intent === "join" && !wasRegistered) {
+    const maxAttendees = Number(eventItem.maxAttendees || 0);
+    if (maxAttendees > 0 && eventItem.attendees.length >= maxAttendees) {
+      throw new Error("活動人數已滿。");
+    }
+  }
+
+  const joiningUser = normalizeUser_({
+    userId: userId,
+    displayName: payload.displayName,
+    pictureUrl: payload.pictureUrl
+  });
+
+  if (intent === "join") {
+    fixedAttendees = fixedAttendees.filter(user => String(user.userId) !== userId);
+    weeklyAttendees = weeklyAttendees.filter(user => String(user.userId) !== userId);
+    if (participationType === "fixed") fixedAttendees.push(joiningUser);
+    else weeklyAttendees.push(joiningUser);
+  } else if (participationType === "fixed") {
+    fixedAttendees = fixedAttendees.filter(user => String(user.userId) !== userId);
+  } else {
+    weeklyAttendees = weeklyAttendees.filter(user => String(user.userId) !== userId);
+  }
+
+  eventItem.fixedAttendees = normalizeUsers_(fixedAttendees);
+  eventItem.weeklyAttendees = normalizeUsers_(weeklyAttendees);
+  eventItem.attendees = normalizeUsers_(eventItem.fixedAttendees.concat(eventItem.weeklyAttendees));
+  eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
+  eventItem.updatedAt = new Date().toISOString();
+  eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+  writeEvent_(eventsSheet, found.rowNumber, eventItem);
+
+  const actionMap = {
+    fixed_join: "固定參與活動",
+    fixed_cancel: "取消固定參與",
+    weekly_join: "本週參與活動",
+    weekly_cancel: "取消本週參與"
+  };
+  const actionKey = participationType + "_" + intent;
+  appendAudit_(auditSheet, payload, {
+    eventId: eventItem.id,
+    actionType: actionKey,
+    action: actionMap[actionKey],
+    details: {
+      attendeeUserId: userId,
+      attendeeName: String(payload.displayName || payload.actorName || ""),
+      participationType: participationType,
+      attendeeCount: eventItem.attendees.length
+    }
+  });
+
+  return {
+    eventId: eventItem.id,
+    rsvpAction: intent,
+    participationType: participationType,
+    attendees: eventItem.attendees,
+    fixedAttendees: eventItem.fixedAttendees,
+    weeklyAttendees: eventItem.weeklyAttendees,
     history: eventItem.history
   };
 }
@@ -381,6 +512,8 @@ function formatEventsSheet_(sheet) {
   setColumnWidthIfPresent_(sheet, map, "status", 90);
   setColumnWidthIfPresent_(sheet, map, "title", 220);
   setColumnWidthIfPresent_(sheet, map, "datetime", 150);
+  setColumnWidthIfPresent_(sheet, map, "isFixedGroup", 100);
+  setColumnWidthIfPresent_(sheet, map, "fixedTimeText", 210);
   setColumnWidthIfPresent_(sheet, map, "location", 220);
   setColumnWidthIfPresent_(sheet, map, "hostName", 130);
   setColumnWidthIfPresent_(sheet, map, "fee", 120);
@@ -432,6 +565,11 @@ function getHeaderMap_(sheet) {
   }, {});
 }
 
+function hasRequiredHeaders_(sheet, requiredHeaders) {
+  const map = getHeaderMap_(sheet);
+  return requiredHeaders.every(header => Boolean(map[header]));
+}
+
 function readAllEvents_(sheet) {
   if (sheet.getLastRow() < 2) return [];
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
@@ -448,12 +586,23 @@ function rowToEvent_(headers, row) {
     let value = row[index];
     if (JSON_EVENT_FIELDS.includes(header)) value = parseJsonField_(value, header === "hostUser" ? null : []);
     if (header === "maxAttendees") value = Number(value || 0);
-    if (header === "deleted") value = value === true || String(value).toLowerCase() === "true";
+    if (["deleted", "isFixedGroup"].includes(header)) {
+      value = value === true || String(value).toLowerCase() === "true";
+    }
     if (typeof value === "string" && /^'[=+\-@]/.test(value)) value = value.slice(1);
     eventItem[header] = value;
   });
   if (!eventItem.status) eventItem.status = APP_CONFIG.STATUS_ACTIVE;
   eventItem.deleted = isDeletedEvent_(eventItem);
+  eventItem.isFixedGroup = eventItem.isFixedGroup === true;
+  eventItem.fixedAttendees = normalizeUsers_(eventItem.fixedAttendees);
+  eventItem.weeklyAttendees = normalizeUsers_(eventItem.weeklyAttendees);
+  if (eventItem.isFixedGroup && eventItem.fixedAttendees.length === 0 && eventItem.weeklyAttendees.length === 0) {
+    eventItem.fixedAttendees = normalizeUsers_(eventItem.attendees);
+  }
+  if (eventItem.isFixedGroup) {
+    eventItem.attendees = normalizeUsers_(eventItem.fixedAttendees.concat(eventItem.weeklyAttendees));
+  }
   eventItem.attendees = normalizeUsers_(eventItem.attendees);
   eventItem.history = Array.isArray(eventItem.history) ? eventItem.history : [];
   return eventItem;
@@ -502,6 +651,8 @@ function normalizeEvent_(payload, existingEvent) {
     status: String(source.status || APP_CONFIG.STATUS_ACTIVE),
     title: String(source.title || "").trim(),
     datetime: String(source.datetime || ""),
+    isFixedGroup: source.isFixedGroup === true || String(source.isFixedGroup).toLowerCase() === "true",
+    fixedTimeText: String(source.fixedTimeText || "").trim(),
     location: String(source.location || "待定"),
     hostName: String(source.hostName || (source.hostUser && source.hostUser.displayName) || ""),
     hostUser: normalizeUser_(source.hostUser),
@@ -509,6 +660,8 @@ function normalizeEvent_(payload, existingEvent) {
     maxAttendees: Math.max(0, Number(source.maxAttendees || 0)),
     description: String(source.description || ""),
     attendees: normalizeUsers_(source.attendees),
+    fixedAttendees: normalizeUsers_(source.fixedAttendees),
+    weeklyAttendees: normalizeUsers_(source.weeklyAttendees),
     history: Array.isArray(source.history) ? source.history : [],
     createdAt: String(source.createdAt || ""),
     updatedAt: String(source.updatedAt || ""),
@@ -572,6 +725,7 @@ function getChangedFields_(previousEvent, nextEvent) {
   const fields = [
     "title",
     "datetime",
+    "fixedTimeText",
     "location",
     "hostName",
     "fee",

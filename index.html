@@ -298,6 +298,11 @@
       color: var(--line-red);
     }
 
+    .tag-fixed {
+      background: #ede9fe;
+      color: #6d28d9;
+    }
+
     .tag-ended {
       background: #e2e8f0;
       color: #64748b;
@@ -366,6 +371,16 @@
       grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
       gap: 6px;
       margin-top: 10px;
+    }
+
+    .card-actions.fixed-actions {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card-actions.fixed-actions .line-btn {
+      padding-left: 6px;
+      padding-right: 6px;
+      font-size: 12px;
     }
 
     .line-btn {
@@ -628,6 +643,49 @@
       margin-bottom: 6px;
     }
 
+    .form-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .form-label-row .form-label {
+      margin-bottom: 0;
+    }
+
+    .fixed-group-toggle {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      color: #6d28d9;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .fixed-group-toggle input {
+      width: 20px;
+      height: 20px;
+      accent-color: #7c3aed;
+    }
+
+    .fixed-time-field {
+      display: none;
+    }
+
+    .fixed-time-field.active {
+      display: block;
+    }
+
+    .attendance-type {
+      color: #6d28d9;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
     .line-input, .line-textarea {
       width: 100%;
       background: #f8fafc;
@@ -779,7 +837,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-05T23:58:20+08:00">v260805.2358</time>
+          <time class="version-label" datetime="2026-08-06T00:30:14+08:00">v260806.0030</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -803,6 +861,7 @@
     <!-- Navigation Pill Tabs -->
     <nav class="nav-filters">
       <button class="tab-btn active" data-filter="open">揪團中</button>
+      <button class="tab-btn" data-filter="fixed">固定團</button>
       <button class="tab-btn" data-filter="ended">已過期</button>
       
       <button id="btn-export-ended" class="export-btn" style="display: none;">
@@ -842,8 +901,14 @@
             <input type="text" id="input-title" class="line-input" placeholder="例如：週末羽球同樂會" required>
           </div>
           <div class="form-group">
-            <div class="form-label">日期與時間 *</div>
-            <div class="datetime-picker-grid">
+            <div class="form-label-row">
+              <div class="form-label">日期與時間 *</div>
+              <label id="fixed-group-control" class="fixed-group-toggle" for="input-is-fixed">
+                <input type="checkbox" id="input-is-fixed">
+                <span>固定團</span>
+              </label>
+            </div>
+            <div id="input-standard-time" class="datetime-picker-grid">
               <label class="datetime-picker-field">
                 <span class="datetime-picker-label">日期</span>
                 <input type="date" id="input-date" class="line-input" required>
@@ -862,6 +927,12 @@
                 </select>
               </label>
               <input type="hidden" id="input-datetime">
+            </div>
+            <div id="input-fixed-time-wrap" class="fixed-time-field">
+              <label class="datetime-picker-field" for="input-fixed-time">
+                <span class="datetime-picker-label">固定團時間</span>
+                <input type="text" id="input-fixed-time" class="line-input" placeholder="例如：每週三 19:30～21:30">
+              </label>
             </div>
           </div>
           <div class="form-group">
@@ -904,7 +975,7 @@
           </div>
           <div class="form-group">
             <div class="form-label">日期與時間 *</div>
-            <div class="datetime-picker-grid">
+            <div id="edit-standard-time" class="datetime-picker-grid">
               <label class="datetime-picker-field">
                 <span class="datetime-picker-label">日期</span>
                 <input type="date" id="edit-date" class="line-input" required>
@@ -923,6 +994,12 @@
                 </select>
               </label>
               <input type="hidden" id="edit-datetime">
+            </div>
+            <div id="edit-fixed-time-wrap" class="fixed-time-field">
+              <label class="datetime-picker-field" for="edit-fixed-time">
+                <span class="datetime-picker-label">固定團時間</span>
+                <input type="text" id="edit-fixed-time" class="line-input" placeholder="例如：每週三 19:30～21:30">
+              </label>
             </div>
           </div>
           <div class="form-group">
@@ -982,7 +1059,7 @@
 
         <div style="margin-bottom:14px;">
           <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-            <span>已報名成員名冊 (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
+            <span><span id="detail-attendee-heading">已報名成員名冊</span> (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
             <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
               @標記成員
             </button>
@@ -1061,7 +1138,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260805.2358",
+      APP_VERSION: "v260806.0030",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbxVPHws_s3yazs06n7tSPRqktRZawEK7B9tyHSQJIn7QIwXVivrS3GRZElqpU6Q4iOiZw/exec",
@@ -1092,6 +1169,7 @@
     let versionCheckInFlight = null;
     let pendingMutationCount = 0;
     let localMutationRevision = 0;
+    let serverSchemaVersion = "0";
     let automaticUpdatesStarted = false;
     let automaticUpdateDebounceTimer = null;
     const processingRSVPEventIds = new Set();
@@ -1185,6 +1263,46 @@
         evt.deleted === true ||
         String(evt.status || "").toLowerCase() === "deleted"
       ));
+    }
+
+    function isFixedGroup(evt) {
+      return Boolean(evt && (
+        evt.isFixedGroup === true ||
+        String(evt.isFixedGroup || "").toLowerCase() === "true"
+      ));
+    }
+
+    function uniqueUsers(users) {
+      const map = new Map();
+      (Array.isArray(users) ? users : []).forEach(user => {
+        if (user && user.userId) map.set(String(user.userId), user);
+      });
+      return Array.from(map.values());
+    }
+
+    function normalizeFixedGroupParticipation(evt) {
+      if (!evt) return evt;
+      evt.fixedAttendees = uniqueUsers(evt.fixedAttendees);
+      evt.weeklyAttendees = uniqueUsers(evt.weeklyAttendees);
+      if (isFixedGroup(evt) && evt.fixedAttendees.length === 0 && evt.weeklyAttendees.length === 0) {
+        evt.fixedAttendees = uniqueUsers(evt.attendees);
+      }
+      if (isFixedGroup(evt)) {
+        evt.attendees = uniqueUsers(evt.fixedAttendees.concat(evt.weeklyAttendees));
+      } else {
+        evt.attendees = uniqueUsers(evt.attendees);
+      }
+      return evt;
+    }
+
+    function isEventEnded(evt) {
+      return !isFixedGroup(evt) && parseSafeDate(evt.datetime) < new Date();
+    }
+
+    function getEventTimeText(evt) {
+      return isFixedGroup(evt)
+        ? String(evt.fixedTimeText || "時間由主揪另行通知")
+        : formatDateTime(evt.datetime);
     }
 
     function getMaxAttendees(evt) {
@@ -1312,6 +1430,7 @@
       renderDevProfiles();
       setupInputFocusScroll();
       setupQuarterHourInputs();
+      updateFixedGroupAvailability();
 
       initLIFF().finally(() => setupAutomaticUpdates());
       runInitialSync();
@@ -1491,6 +1610,43 @@
       });
     }
 
+    function updateFixedGroupAvailability() {
+      const control = document.getElementById("fixed-group-control");
+      if (!control) return;
+      const isSupported = isDevMode || Number(serverSchemaVersion) >= 2;
+      control.style.display = isSupported ? "inline-flex" : "none";
+      if (!isSupported) setCreateFixedMode(false);
+    }
+
+    function setCreateFixedMode(enabled) {
+      const checkbox = document.getElementById("input-is-fixed");
+      const standardTime = document.getElementById("input-standard-time");
+      const fixedTimeWrap = document.getElementById("input-fixed-time-wrap");
+      const fixedTimeInput = document.getElementById("input-fixed-time");
+      checkbox.checked = Boolean(enabled);
+      standardTime.style.display = enabled ? "none" : "grid";
+      fixedTimeWrap.classList.toggle("active", Boolean(enabled));
+      ["input-date", "input-hour", "input-minute"].forEach(id => {
+        document.getElementById(id).required = !enabled;
+      });
+      fixedTimeInput.required = Boolean(enabled);
+    }
+
+    function setEditTimeMode(evt) {
+      const fixed = isFixedGroup(evt);
+      const standardTime = document.getElementById("edit-standard-time");
+      const fixedTimeWrap = document.getElementById("edit-fixed-time-wrap");
+      const fixedTimeInput = document.getElementById("edit-fixed-time");
+      standardTime.style.display = fixed ? "none" : "grid";
+      fixedTimeWrap.classList.toggle("active", fixed);
+      ["edit-date", "edit-hour", "edit-minute"].forEach(id => {
+        document.getElementById(id).required = !fixed;
+      });
+      fixedTimeInput.required = fixed;
+      fixedTimeInput.value = fixed ? String(evt.fixedTimeText || "") : "";
+      if (!fixed) setDateTimePickerValue("edit", evt.datetime);
+    }
+
     function checkDevModeVisibility() {
       const urlParams = new URLSearchParams(window.location.search);
       const isDevParam = urlParams.get('dev') === 'true';
@@ -1644,6 +1800,8 @@
         const data = await res.json();
         
         if (data && data.status === "success" && data.events && Array.isArray(data.events)) {
+          serverSchemaVersion = String(data.schemaVersion || "1");
+          updateFixedGroupAvailability();
           const uniqueEventMap = new Map();
           data.events.forEach(remoteEvt => {
             if (!remoteEvt || !remoteEvt.id) return;
@@ -1656,6 +1814,15 @@
               }
             } catch(e) { remoteEvt.attendees = []; }
             if (!Array.isArray(remoteEvt.attendees)) remoteEvt.attendees = [];
+
+            ["fixedAttendees", "weeklyAttendees"].forEach(field => {
+              try {
+                if (typeof remoteEvt[field] === "string") remoteEvt[field] = JSON.parse(remoteEvt[field]);
+              } catch (e) { remoteEvt[field] = []; }
+              if (!Array.isArray(remoteEvt[field])) remoteEvt[field] = [];
+            });
+            remoteEvt.isFixedGroup = remoteEvt.isFixedGroup === true ||
+              String(remoteEvt.isFixedGroup || "").toLowerCase() === "true";
 
             // 容錯防崩潰解析 history
             try {
@@ -1671,12 +1838,7 @@
               }
             } catch(e) { remoteEvt.hostUser = null; }
 
-            // 成員去重
-            const uniqueUserMap = new Map();
-            remoteEvt.attendees.forEach(u => {
-              if (u && u.userId) uniqueUserMap.set(u.userId, u);
-            });
-            remoteEvt.attendees = Array.from(uniqueUserMap.values());
+            normalizeFixedGroupParticipation(remoteEvt);
 
             if (!isEventDeleted(remoteEvt)) uniqueEventMap.set(remoteEvt.id, remoteEvt);
           });
@@ -1774,6 +1936,7 @@
           eventsData = eventsData.filter(evt => !isEventDeleted(evt));
           eventsData.forEach(evt => {
             evt.location = normalizeLocation(evt.location);
+            normalizeFixedGroupParticipation(evt);
           });
           return;
         } catch (e) {}
@@ -1868,13 +2031,20 @@
 
       const sortedEvents = eventsData
         .filter(evt => !isEventDeleted(evt))
-        .sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
+        .sort((a, b) => {
+          if (isFixedGroup(a) !== isFixedGroup(b)) return isFixedGroup(a) ? -1 : 1;
+          if (isFixedGroup(a)) return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+          return parseSafeDate(a.datetime) - parseSafeDate(b.datetime);
+        });
       
       const filteredEvents = sortedEvents.filter(evt => {
-        const isEnded = parseSafeDate(evt.datetime) < new Date();
+        const isEnded = isEventEnded(evt);
 
         if (currentFilter === "open") {
           return !isEnded;
+        }
+        if (currentFilter === "fixed") {
+          return isFixedGroup(evt);
         }
         if (currentFilter === "ended") {
           return isEnded;
@@ -1892,16 +2062,27 @@
       }
 
       filteredEvents.forEach(evt => {
-        const isEnded = parseSafeDate(evt.datetime) < new Date();
+        normalizeFixedGroupParticipation(evt);
+        const fixedGroup = isFixedGroup(evt);
+        const isEnded = isEventEnded(evt);
         const maxCap = getMaxAttendees(evt);
         const isFull = maxCap > 0 && evt.attendees.length >= maxCap;
         const isAttending = currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
+        const isFixedParticipant = currentUser
+          ? evt.fixedAttendees.some(u => String(u.userId) === String(currentUser.userId))
+          : false;
+        const isWeeklyParticipant = currentUser
+          ? evt.weeklyAttendees.some(u => String(u.userId) === String(currentUser.userId))
+          : false;
         const isHost = isCurrentUserHost(evt);
         
         let tagClass = "tag-open";
         let tagText = "揪團中";
         
-        if (isEnded) {
+        if (fixedGroup) {
+          tagClass = "tag-fixed";
+          tagText = "固定團";
+        } else if (isEnded) {
           tagClass = "tag-ended";
           tagText = "已過期";
         } else if (isFull) {
@@ -1909,25 +2090,41 @@
           tagText = "揪團已滿";
         }
 
-        const formattedTime = formatDateTime(evt.datetime);
+        const formattedTime = getEventTimeText(evt);
 
         const cardEl = document.createElement("div");
         cardEl.className = `event-card ${isEnded ? 'ended' : ''}`;
 
-        let rsvpBtnHtml = "";
-        if (isEnded) {
-          rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
+        let actionButtonsHtml = "";
+        if (fixedGroup) {
+          if (isHost) {
+            actionButtonsHtml = `
+              <button class="line-btn btn-detail" disabled title="如需退出，請到編輯內容更換主揪">你是主揪</button>
+              <button class="line-btn btn-detail" disabled>固定參與</button>
+            `;
+          } else {
+            const fixedDisabled = isFull && !isAttending ? "disabled" : "";
+            const weeklyDisabled = isFull && !isAttending ? "disabled" : "";
+            actionButtonsHtml = `
+              <button class="line-btn ${isFixedParticipant ? "btn-cancel" : "btn-join"} fixed-rsvp-action" data-participation="fixed" ${fixedDisabled}>${isFixedParticipant ? "取消固定參與" : "固定參與"}</button>
+              <button class="line-btn ${isWeeklyParticipant ? "btn-cancel" : "btn-calendar"} fixed-rsvp-action" data-participation="weekly" ${weeklyDisabled}>${isWeeklyParticipant ? "取消本週參與" : "本週參與"}</button>
+            `;
+          }
+        } else if (isEnded) {
+          actionButtonsHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
         } else if (isAttending && isHost) {
-          rsvpBtnHtml = `<button class="line-btn btn-detail" disabled title="如需退出，請到編輯內容更換主揪">你是主揪</button>`;
+          actionButtonsHtml = `<button class="line-btn btn-detail" disabled title="如需退出，請到編輯內容更換主揪">你是主揪</button>`;
         } else if (isAttending) {
-          rsvpBtnHtml = `<button class="line-btn btn-cancel rsvp-action">取消參加</button>`;
+          actionButtonsHtml = `<button class="line-btn btn-cancel rsvp-action">取消參加</button>`;
         } else if (isFull) {
-          rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>揪團已滿</button>`;
+          actionButtonsHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>揪團已滿</button>`;
         } else {
-          rsvpBtnHtml = `<button class="line-btn btn-join rsvp-action">參加活動</button>`;
+          actionButtonsHtml = `<button class="line-btn btn-join rsvp-action">參加活動</button>`;
         }
 
-        const gcalUrl = generateGoogleCalendarUrl(evt);
+        const calendarHtml = fixedGroup
+          ? ""
+          : `<a class="line-btn btn-calendar" href="${generateGoogleCalendarUrl(evt)}" target="_blank" rel="noopener noreferrer">加到行事曆</a>`;
 
         cardEl.innerHTML = `
           <div class="card-header">
@@ -1946,16 +2143,19 @@
             </div>
           </div>
 
-          <div class="card-actions">
-            ${rsvpBtnHtml}
+          <div class="card-actions ${fixedGroup ? "fixed-actions" : ""}">
+            ${actionButtonsHtml}
             <button class="line-btn btn-detail detail-action">詳情</button>
-            <a class="line-btn btn-calendar" href="${gcalUrl}" target="_blank" rel="noopener noreferrer">加到行事曆</a>
+            ${calendarHtml}
           </div>
         `;
 
         renderSafeLocation(cardEl.querySelector(".event-location"), evt.location);
         const rsvpButton = cardEl.querySelector(".rsvp-action");
         if (rsvpButton) rsvpButton.onclick = () => toggleRSVP(evt.id);
+        cardEl.querySelectorAll(".fixed-rsvp-action").forEach(button => {
+          button.onclick = () => toggleFixedParticipation(evt.id, button.dataset.participation);
+        });
         cardEl.querySelector(".detail-action").onclick = () => openDetailModal(evt.id);
 
         listEl.appendChild(cardEl);
@@ -1966,12 +2166,15 @@
     function broadcastOpenEvents() {
       const openEvents = eventsData
         .filter(evt => {
-          const isEnded = parseSafeDate(evt.datetime) < new Date();
+          const isEnded = isEventEnded(evt);
           const maxCap = getMaxAttendees(evt);
           const isFull = maxCap > 0 && evt.attendees.length >= maxCap;
           return !isEnded && !isFull;
         })
-        .sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
+        .sort((a, b) => {
+          if (isFixedGroup(a) !== isFixedGroup(b)) return isFixedGroup(a) ? -1 : 1;
+          return isFixedGroup(a) ? 0 : parseSafeDate(a.datetime) - parseSafeDate(b.datetime);
+        });
 
       if (openEvents.length === 0) {
         alert("目前沒有開放報名中的活動可宣傳！");
@@ -1981,7 +2184,7 @@
       const pageUrl = getShareableUrl();
 
       const eventBlocks = openEvents.map((evt, idx) => {
-        const formattedTime = formatDateTime(evt.datetime);
+        const formattedTime = getEventTimeText(evt);
         const maxCap = getMaxAttendees(evt);
         const capacityStr = `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人`;
         
@@ -2007,7 +2210,7 @@ ${pageUrl}`;
     // --- 10. EXPORT ENDED EVENTS FUNCTION ---
     function exportEndedEvents() {
       const endedEvents = eventsData
-        .filter(evt => parseSafeDate(evt.datetime) < new Date())
+        .filter(evt => isEventEnded(evt))
         .sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
 
       if (endedEvents.length === 0) {
@@ -2038,7 +2241,7 @@ ${pageUrl}`;
       const evt = eventsData.find(e => e.id === eventId);
       if (!evt) return;
 
-      const isEnded = parseSafeDate(evt.datetime) < new Date();
+      const isEnded = isEventEnded(evt);
       if (isEnded) return;
 
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
@@ -2089,9 +2292,81 @@ ${pageUrl}`;
       });
     }
 
+    function toggleFixedParticipation(eventId, participationType) {
+      if (processingRSVPEventIds.has(eventId)) return;
+      if (!ensureLoggedIn()) return;
+
+      const evt = eventsData.find(eventItem => eventItem.id === eventId);
+      if (!evt || !isFixedGroup(evt)) return;
+      if (isCurrentUserHost(evt)) {
+        alert("固定團主揪必須維持固定參與；如需退出，請先到編輯內容交棒給新主揪。");
+        return;
+      }
+
+      normalizeFixedGroupParticipation(evt);
+      const targetList = participationType === "fixed" ? evt.fixedAttendees : evt.weeklyAttendees;
+      const isCurrentlySelected = targetList.some(user => String(user.userId) === String(currentUser.userId));
+      const actionType = isCurrentlySelected ? "cancel" : "join";
+
+      if (actionType === "join" && !evt.attendees.some(user => String(user.userId) === String(currentUser.userId))) {
+        const maxCap = getMaxAttendees(evt);
+        if (maxCap > 0 && evt.attendees.length >= maxCap) {
+          alert(`此固定團已滿（上限 ${maxCap} 人），無法再新增參與者！`);
+          return;
+        }
+      }
+
+      if (actionType === "join") {
+        evt.fixedAttendees = evt.fixedAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
+        evt.weeklyAttendees = evt.weeklyAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
+        if (participationType === "fixed") evt.fixedAttendees.push(currentUser);
+        else evt.weeklyAttendees.push(currentUser);
+      } else if (participationType === "fixed") {
+        evt.fixedAttendees = evt.fixedAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
+      } else {
+        evt.weeklyAttendees = evt.weeklyAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
+      }
+      normalizeFixedGroupParticipation(evt);
+
+      const actionLabels = {
+        fixed_join: "固定參與活動",
+        fixed_cancel: "取消固定參與",
+        weekly_join: "本週參與活動",
+        weekly_cancel: "取消本週參與"
+      };
+      addHistoryLog(evt, actionLabels[`${participationType}_${actionType}`], actionType === "join" ? "join" : "leave");
+
+      processingRSVPEventIds.add(eventId);
+      setTimeout(() => processingRSVPEventIds.delete(eventId), 450);
+      saveLocalEvents();
+      renderEvents();
+      triggerFixedParticipationCopy(evt, participationType, actionType);
+
+      sendPostToGAS({
+        action: "toggleRSVP",
+        rsvpAction: actionType,
+        participationType: participationType,
+        eventId: evt.id,
+        userId: currentUser.userId,
+        displayName: currentUser.displayName,
+        pictureUrl: currentUser.pictureUrl,
+        historyEntry: evt.history[0]
+      });
+    }
+
+    function triggerFixedParticipationCopy(evt, participationType, actionType) {
+      const participationText = participationType === "fixed" ? "固定參與" : "本週參與";
+      const copiedText = actionType === "cancel"
+        ? `取消${participationText}${evt.title}活動`
+        : `${participationText}${evt.title}活動`;
+      safeCopyText(copiedText);
+      document.getElementById("alert-copied-text").innerText = copiedText;
+      openModal("modal-copy-alert");
+    }
+
     // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
     function triggerAutoCopyAndAlert(evt, actionType) {
-      const formattedTime = formatDateTime(evt.datetime);
+      const formattedTime = getEventTimeText(evt);
 
       const pageUrl = getShareableUrl();
       
@@ -2116,7 +2391,7 @@ ${pageUrl}`;
       const textToCopy = 
 `${headline}
 主題：${evt.title}
-日期：${formattedTime}
+時間：${formattedTime}
 報名人：${attendeeNames || '尚無'}
 
 點此線上報名：
@@ -2133,10 +2408,23 @@ ${pageUrl}`;
       e.preventDefault();
       if (!ensureLoggedIn()) return;
 
+      const fixedGroup = document.getElementById("input-is-fixed").checked;
+      if (fixedGroup && !isDevMode && Number(serverSchemaVersion) < 2) {
+        alert("固定團資料庫尚未完成更新，請稍後再試。");
+        return;
+      }
+      const fixedTimeText = document.getElementById("input-fixed-time").value.trim();
+      if (fixedGroup && !fixedTimeText) {
+        alert("請填寫固定團時間。");
+        return;
+      }
+
       const newEvent = {
         id: "evt_" + Date.now(),
         title: document.getElementById("input-title").value.trim(),
-        datetime: getDateTimePickerValue("input"),
+        datetime: fixedGroup ? "" : getDateTimePickerValue("input"),
+        isFixedGroup: fixedGroup,
+        fixedTimeText: fixedGroup ? fixedTimeText : "",
         location: normalizeLocation(document.getElementById("input-location").value),
         fee: document.getElementById("input-fee").value.trim() || "免費",
         maxAttendees: parseInt(document.getElementById("input-max").value, 10) || 0,
@@ -2147,10 +2435,12 @@ ${pageUrl}`;
         deleted: false,
         createdAt: new Date().toISOString(),
         attendees: [currentUser],
+        fixedAttendees: fixedGroup ? [currentUser] : [],
+        weeklyAttendees: [],
         history: []
       };
 
-      addHistoryLog(newEvent, "建立活動並成為主揪", "create");
+      addHistoryLog(newEvent, fixedGroup ? "建立固定團並成為主揪" : "建立活動並成為主揪", "create");
 
       eventsData.push(newEvent);
       saveLocalEvents();
@@ -2159,6 +2449,7 @@ ${pageUrl}`;
       renderEvents();
       closeModal("modal-create");
       document.getElementById("form-create-event").reset();
+      setCreateFixedMode(false);
 
       triggerAutoCopyAndAlert(newEvent, "create");
     });
@@ -2219,7 +2510,15 @@ ${pageUrl}`;
       }
 
       const newTitle = document.getElementById("edit-title").value.trim();
-      const newDatetime = getDateTimePickerValue("edit");
+      const fixedGroup = isFixedGroup(evt);
+      const newDatetime = fixedGroup ? "" : getDateTimePickerValue("edit");
+      const newFixedTimeText = fixedGroup
+        ? document.getElementById("edit-fixed-time").value.trim()
+        : "";
+      if (fixedGroup && !newFixedTimeText) {
+        alert("請填寫固定團時間。");
+        return;
+      }
       const newLocation = normalizeLocation(document.getElementById("edit-location").value);
       const newFee = document.getElementById("edit-fee").value.trim() || "免費";
       const newMax = parseInt(document.getElementById("edit-max").value, 10) || 0;
@@ -2237,7 +2536,10 @@ ${pageUrl}`;
 
       const contentChanges = [];
       if (evt.title !== newTitle) contentChanges.push(`名稱改為「${newTitle}」`);
-      if (evt.datetime !== newDatetime) contentChanges.push(`時間改為「${formatDateTime(newDatetime)}」`);
+      if (!fixedGroup && evt.datetime !== newDatetime) contentChanges.push(`時間改為「${formatDateTime(newDatetime)}」`);
+      if (fixedGroup && String(evt.fixedTimeText || "") !== newFixedTimeText) {
+        contentChanges.push(`固定時間改為「${newFixedTimeText}」`);
+      }
       if (evt.location !== newLocation) contentChanges.push(`地點改為「${newLocation}」`);
       if (evt.fee !== newFee) contentChanges.push(`費用改為「${newFee}」`);
       if (getMaxAttendees(evt) !== newMax) contentChanges.push(`人數上限改為「${newMax || "無限制"}」`);
@@ -2250,6 +2552,7 @@ ${pageUrl}`;
 
       evt.title = newTitle;
       evt.datetime = newDatetime;
+      evt.fixedTimeText = newFixedTimeText;
       evt.location = newLocation;
       evt.fee = newFee;
       evt.maxAttendees = newMax;
@@ -2266,6 +2569,11 @@ ${pageUrl}`;
           pictureUrl: selectedHost.pictureUrl || ""
         };
         evt.hostName = newHostName;
+        if (fixedGroup) {
+          evt.weeklyAttendees = evt.weeklyAttendees.filter(user => String(user.userId) !== selectedHostId);
+          evt.fixedAttendees = uniqueUsers([selectedHost].concat(evt.fixedAttendees));
+          normalizeFixedGroupParticipation(evt);
+        }
         addHistoryLog(evt, `將主揪交棒給「${newHostName}」`, "handoff");
       }
 
@@ -2286,7 +2594,8 @@ ${pageUrl}`;
       const evt = eventsData.find(e => e.id === eventId);
       if (!evt) return;
 
-      const formattedTime = formatDateTime(evt.datetime);
+      normalizeFixedGroupParticipation(evt);
+      const formattedTime = getEventTimeText(evt);
       const maxCap = getMaxAttendees(evt);
       const isHost = isCurrentUserHost(evt);
 
@@ -2301,6 +2610,9 @@ ${pageUrl}`;
       document.getElementById("detail-host-name").innerText = hostDisplayName;
       editBtn.style.display = isHost ? "flex" : "none";
       document.getElementById("detail-desc").innerText = evt.description || "尚無補充說明。";
+      document.getElementById("detail-attendee-heading").innerText = isFixedGroup(evt)
+        ? "固定團參與名冊"
+        : "已報名成員名冊";
       document.getElementById("detail-capacity-text").innerText = 
         `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''}`;
 
@@ -2322,6 +2634,14 @@ ${pageUrl}`;
           const name = document.createElement("span");
           name.textContent = displayName;
           pill.append(image, name);
+          if (isFixedGroup(evt)) {
+            const type = document.createElement("span");
+            type.className = "attendance-type";
+            type.textContent = evt.fixedAttendees.some(member => String(member.userId) === String(u.userId))
+              ? "固定"
+              : "本週";
+            pill.append(type);
+          }
           attendeesEl.append(pill);
         });
       }
@@ -2347,7 +2667,7 @@ ${pageUrl}`;
         closeModal("modal-detail");
         
         document.getElementById("edit-title").value = evt.title;
-        setDateTimePickerValue("edit", evt.datetime);
+        setEditTimeMode(evt);
         document.getElementById("edit-location").value = normalizeLocation(evt.location);
         document.getElementById("edit-fee").value = evt.fee || "";
         document.getElementById("edit-max").value = evt.maxAttendees || 0;
@@ -2363,11 +2683,26 @@ ${pageUrl}`;
           return;
         }
 
-        const mentionsText = evt.attendees.map(u => `@${u.displayName}`).join(" ");
+        const maxCapacity = getMaxAttendees(evt);
+        const capacityText = `${evt.attendees.length}${maxCapacity > 0 ? "/" + maxCapacity : ""} 人`;
+        const baseDetails = `時間：${formattedTime}
+地點：${normalizeLocation(evt.location)}
+費用：${evt.fee || "免費"}
+主揪：${evt.hostName || evt.hostUser?.displayName || "未指定"}
+人數：${capacityText}
+活動說明：${evt.description || "尚無補充說明"}`;
+        let memberDetails;
+        if (isFixedGroup(evt)) {
+          const fixedNames = evt.fixedAttendees.map(user => `@${user.displayName}`).join(" ") || "尚無";
+          const weeklyNames = evt.weeklyAttendees.map(user => `@${user.displayName}`).join(" ") || "尚無";
+          memberDetails = `固定參與：${fixedNames}\n本週參與：${weeklyNames}`;
+        } else {
+          memberDetails = `已報名成員：${evt.attendees.map(user => `@${user.displayName}`).join(" ")}`;
+        }
         const mentionNoticeText = 
-`【活動成員提醒：${evt.title}】
-時間：${formattedTime}
-成員：${mentionsText}
+`【${isFixedGroup(evt) ? "固定團" : "活動"}成員提醒：${evt.title}】
+${baseDetails}
+${memberDetails}
 
 各位記得準時出席活動唷！`;
 
@@ -2496,6 +2831,10 @@ ${pageUrl}`;
 
     // --- 18. EVENT LISTENERS ---
     function setupEventListeners() {
+      document.getElementById("input-is-fixed").onchange = event => {
+        setCreateFixedMode(event.target.checked);
+      };
+
       document.getElementById("fab-add-event").onclick = () => {
         if (!ensureLoggedIn()) return;
         const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
