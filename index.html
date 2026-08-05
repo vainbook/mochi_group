@@ -159,7 +159,7 @@
       align-items: center;
     }
 
-    /* Navigation Pill Tabs (僅保留：揪團中、已過期) */
+    /* Navigation Pill Tabs */
     .nav-filters {
       display: flex;
       gap: 8px;
@@ -981,7 +981,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (TWO TABS & "揪團已滿" BUTTON)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (DATE FORMAT WITHOUT MINUTES)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1046,6 +1046,18 @@
       const d = new Date(cleanStr);
       if (isNaN(d.getTime())) return new Date(dateStr);
       return d;
+    }
+
+    // 🕒 時間格式化：僅顯示日期與整點 (不顯示分鐘)
+    function formatDateTimeNoMinutes(dateStr) {
+      const d = parseSafeDate(dateStr);
+      const month = d.getMonth() + 1;
+      const date = d.getDate();
+      const hour = d.getHours();
+      const weekdays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+      const weekday = weekdays[d.getDay()];
+
+      return `${month}/${date} (${weekday}) ${hour}點`;
     }
 
     function getMaxAttendees(evt) {
@@ -1347,7 +1359,6 @@
 
       const sortedEvents = [...eventsData].sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
       
-      // 僅保留兩種分類：「open (揪團中)」 與 「ended (已過期)」
       const filteredEvents = sortedEvents.filter(evt => {
         const isEnded = parseSafeDate(evt.datetime) < new Date();
 
@@ -1386,9 +1397,8 @@
           tagText = "揪團已滿";
         }
 
-        const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
-          month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
-        });
+        // 不顯示分鐘 (例如: 8/6 (週四) 19點)
+        const formattedTime = formatDateTimeNoMinutes(evt.datetime);
 
         const cardEl = document.createElement("div");
         cardEl.className = `event-card ${isEnded ? 'ended' : ''}`;
@@ -1487,9 +1497,7 @@
       const pageUrl = getShareableUrl();
 
       const eventBlocks = openEvents.map((evt, idx) => {
-        const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
-          month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
-        });
+        const formattedTime = formatDateTimeNoMinutes(evt.datetime);
         const maxCap = getMaxAttendees(evt);
         const capacityStr = `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人`;
         
@@ -1599,9 +1607,7 @@ ${pageUrl}`;
 
     // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
     function triggerAutoCopyAndAlert(evt, actionType) {
-      const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
-        month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
-      });
+      const formattedTime = formatDateTimeNoMinutes(evt.datetime);
 
       const pageUrl = getShareableUrl();
       
@@ -1754,10 +1760,7 @@ ${pageUrl}`;
       const evt = eventsData.find(e => e.id === eventId);
       if (!evt) return;
 
-      const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
-        year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
-      });
-
+      const formattedTime = formatDateTimeNoMinutes(evt.datetime);
       const maxCap = getMaxAttendees(evt);
 
       document.getElementById("detail-title").innerText = evt.title;
