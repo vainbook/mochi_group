@@ -457,7 +457,7 @@
       background: #e6a600;
     }
 
-    /* Modal Overlay & Box */
+    /* Fixed Modal Structure (視窗完全固定，不追著格子跑) */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -491,28 +491,31 @@
     .modal-box {
       width: 100%;
       max-width: 500px;
-      max-height: 85vh;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
+      height: 82vh; /* 固定高度，防止鍵盤跳動時畫面追著跑 */
+      max-height: 580px;
       background: #ffffff;
       border-radius: 20px 20px 0 0;
-      padding: 20px 18px 30px 18px;
+      padding: 20px 18px;
       box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
     }
 
     @media (min-width: 600px) {
       .modal-box {
         border-radius: 20px;
         padding: 24px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        height: auto;
+        max-height: 85vh;
       }
     }
 
     .modal-title {
+      flex-shrink: 0;
       font-size: 19px;
       font-weight: 800;
       color: #0f172a;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       padding-bottom: 10px;
       border-bottom: 1px solid #f1f5f9;
       display: flex;
@@ -538,6 +541,21 @@
     .modal-close:hover {
       background: #e2e8f0;
       color: #0f172a;
+    }
+
+    .modal-form-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-right: 4px;
+    }
+
+    .modal-footer {
+      flex-shrink: 0;
+      padding-top: 12px;
+      margin-top: 8px;
+      border-top: 1px solid #f1f5f9;
+      background: #ffffff;
     }
 
     /* Form Inputs */
@@ -732,12 +750,14 @@
         <span>📌 發表/更新頂部公告</span>
         <button class="modal-close" data-close="modal-edit-notice">✕</button>
       </div>
-      <form id="form-edit-notice">
-        <div class="form-group">
-          <label class="form-label">公告內容 (發布後會更新至頂部，並留存留言紀錄)</label>
-          <textarea id="input-notice-text" class="line-textarea" style="min-height:120px;" placeholder="寫下要提醒群組大家的注意事項..." required></textarea>
+      <form id="form-edit-notice" style="display:flex; flex-direction:column; flex:1;">
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label class="form-label">公告內容 (發布後會更新至頂部，並留存留言紀錄)</label>
+            <textarea id="input-notice-text" class="line-textarea" style="min-height:120px;" placeholder="寫下要提醒群組大家的注意事項..." required></textarea>
+          </div>
         </div>
-        <div style="display:flex; gap:10px; margin-top:18px;">
+        <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-edit-notice">取消</button>
           <button type="submit" class="line-btn btn-join" style="flex:1.5;">📢 發布公告並複製通報</button>
         </div>
@@ -752,52 +772,56 @@
         <span>📜 頂部公告歷史留言紀錄</span>
         <button class="modal-close" data-close="modal-notice-history">✕</button>
       </div>
-      <div id="notice-history-container" class="history-box" style="max-height:260px;">
-        <!-- Rendered History -->
+      <div class="modal-form-body">
+        <div id="notice-history-container" class="history-box" style="max-height:100%;">
+          <!-- Rendered History -->
+        </div>
       </div>
-      <div style="margin-top:16px; text-align:right;">
+      <div class="modal-footer" style="text-align:right;">
         <button class="line-btn btn-detail" data-close="modal-notice-history">關閉</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Create Event -->
+  <!-- Modal: Create Event (Fixed Layout, 不會追著格子跑) -->
   <div id="modal-create" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-title">
         <span>➕ 創立活動</span>
         <button class="modal-close" data-close="modal-create">✕</button>
       </div>
-      <form id="form-create-event">
-        <div class="form-group">
-          <label class="form-label">活動名稱 *</label>
-          <input type="text" id="input-title" class="line-input" placeholder="例如：週末羽球同樂會" required>
+      <form id="form-create-event" style="display:flex; flex-direction:column; flex:1;">
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label class="form-label">活動名稱 *</label>
+            <input type="text" id="input-title" class="line-input" placeholder="例如：週末羽球同樂會" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">日期與時間 * (點擊選擇)</label>
+            <input type="datetime-local" id="input-datetime" class="line-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">活動地點 (選填，可輸入地址或貼上地圖網址)</label>
+            <input type="text" id="input-location" class="line-input" placeholder="例如：台北市立羽球館 (選填)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">主揪 / 主辦人名稱</label>
+            <input type="text" id="input-host-name" class="line-input" placeholder="預設為當前 LINE 暱稱（可修改）">
+          </div>
+          <div class="form-group">
+            <label class="form-label">活動費用</label>
+            <input type="text" id="input-fee" class="line-input" placeholder="例如：$200 / 人 或 免費">
+          </div>
+          <div class="form-group">
+            <label class="form-label">人數上限 (0 代表無限制)</label>
+            <input type="number" id="input-max" class="line-input" value="8" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">補充說明</label>
+            <textarea id="input-desc" class="line-textarea" placeholder="例如：請自備球拍、穿著運動鞋！"></textarea>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">日期與時間 * (點擊選擇)</label>
-          <input type="datetime-local" id="input-datetime" class="line-input" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">活動地點 (選填，可輸入地址或貼上 Google Maps 網址)</label>
-          <input type="text" id="input-location" class="line-input" placeholder="例如：台北市立羽球館 或 貼上地圖網址 (選填)">
-        </div>
-        <div class="form-group">
-          <label class="form-label">主揪 / 主辦人名稱</label>
-          <input type="text" id="input-host-name" class="line-input" placeholder="預設為當前 LINE 暱稱（可修改）">
-        </div>
-        <div class="form-group">
-          <label class="form-label">活動費用</label>
-          <input type="text" id="input-fee" class="line-input" placeholder="例如：$200 / 人 或 免費">
-        </div>
-        <div class="form-group">
-          <label class="form-label">人數上限 (0 代表無限制)</label>
-          <input type="number" id="input-max" class="line-input" value="8" min="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">補充說明</label>
-          <textarea id="input-desc" class="line-textarea" placeholder="例如：請自備球拍、穿著運動鞋！"></textarea>
-        </div>
-        <div style="display:flex; gap:10px; margin-top:18px;">
+        <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-create">取消</button>
           <button type="submit" class="line-btn btn-join" style="flex:1.5;">⚡ 發布活動</button>
         </div>
@@ -812,36 +836,38 @@
         <span>✏️ 編輯活動內容</span>
         <button class="modal-close" data-close="modal-edit">✕</button>
       </div>
-      <form id="form-edit-event">
-        <div class="form-group">
-          <label class="form-label">活動名稱 *</label>
-          <input type="text" id="edit-title" class="line-input" required>
+      <form id="form-edit-event" style="display:flex; flex-direction:column; flex:1;">
+        <div class="modal-form-body">
+          <div class="form-group">
+            <label class="form-label">活動名稱 *</label>
+            <input type="text" id="edit-title" class="line-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">日期與時間 *</label>
+            <input type="datetime-local" id="edit-datetime" class="line-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">活動地點 (選填)</label>
+            <input type="text" id="edit-location" class="line-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">主揪名稱</label>
+            <input type="text" id="edit-host-name" class="line-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">活動費用</label>
+            <input type="text" id="edit-fee" class="line-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">人數上限 (0 代表無限制)</label>
+            <input type="number" id="edit-max" class="line-input" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">補充說明</label>
+            <textarea id="edit-desc" class="line-textarea"></textarea>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">日期與時間 *</label>
-          <input type="datetime-local" id="edit-datetime" class="line-input" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">活動地點 (選填)</label>
-          <input type="text" id="edit-location" class="line-input">
-        </div>
-        <div class="form-group">
-          <label class="form-label">主揪名稱</label>
-          <input type="text" id="edit-host-name" class="line-input">
-        </div>
-        <div class="form-group">
-          <label class="form-label">活動費用</label>
-          <input type="text" id="edit-fee" class="line-input">
-        </div>
-        <div class="form-group">
-          <label class="form-label">人數上限 (0 代表無限制)</label>
-          <input type="number" id="edit-max" class="line-input" min="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">補充說明</label>
-          <textarea id="edit-desc" class="line-textarea"></textarea>
-        </div>
-        <div style="display:flex; gap:10px; margin-top:18px;">
+        <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-edit">取消</button>
           <button type="submit" class="line-btn btn-join" style="flex:1.5;">💾 儲存並更新通報</button>
         </div>
@@ -860,45 +886,47 @@
         </div>
       </div>
       
-      <div style="background:#f8fafc; border-radius:12px; padding:12px; margin-bottom:14px; border:1px solid #e2e8f0;">
-        <div style="margin-bottom:8px;"><strong>⏰ 時間：</strong><span id="detail-time">--</span></div>
-        <div style="margin-bottom:8px;"><strong>📍 地點：</strong><span id="detail-location">--</span></div>
-        <div style="margin-bottom:8px;"><strong>💰 費用：</strong><span id="detail-fee">--</span></div>
-        
-        <!-- Editable Host Section -->
-        <div style="display:flex; align-items:center; gap:8px;">
-          <strong>👑 主揪：</strong>
-          <input type="text" id="detail-host-input" class="line-input" style="padding:4px 8px; font-size:13px; width:150px; height:32px;">
-          <button id="btn-save-host" class="line-btn btn-join" style="padding:4px 10px; font-size:12px;">儲存</button>
+      <div class="modal-form-body">
+        <div style="background:#f8fafc; border-radius:12px; padding:12px; margin-bottom:14px; border:1px solid #e2e8f0;">
+          <div style="margin-bottom:8px;"><strong>⏰ 時間：</strong><span id="detail-time">--</span></div>
+          <div style="margin-bottom:8px;"><strong>📍 地點：</strong><span id="detail-location">--</span></div>
+          <div style="margin-bottom:8px;"><strong>💰 費用：</strong><span id="detail-fee">--</span></div>
+          
+          <!-- Editable Host Section -->
+          <div style="display:flex; align-items:center; gap:8px;">
+            <strong>👑 主揪：</strong>
+            <input type="text" id="detail-host-input" class="line-input" style="padding:4px 8px; font-size:13px; width:150px; height:32px;">
+            <button id="btn-save-host" class="line-btn btn-join" style="padding:4px 10px; font-size:12px;">儲存</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-weight:700; color:#475569; margin-bottom:4px;">📝 具體活動說明：</div>
+          <div id="detail-desc" style="background:#f8fafc; padding:12px; border-radius:10px; border:1px solid #e2e8f0; white-space:pre-wrap; color:#334155;">--</div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+            <span>👥 已報名成員名冊 (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
+            <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 10px; font-size:12px;">
+              🏷️ @標記成員
+            </button>
+          </div>
+          <div id="detail-attendees" style="background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0; max-height:140px; overflow-y:auto; display:flex; flex-wrap:wrap; gap:6px;">
+            <!-- Attendees -->
+          </div>
+        </div>
+
+        <!-- History Update Logs -->
+        <div>
+          <div style="font-weight:700; color:#475569; margin-bottom:6px;">📜 編輯與更新歷史紀錄：</div>
+          <div id="detail-history-list" class="history-box">
+            <!-- History log items -->
+          </div>
         </div>
       </div>
 
-      <div style="margin-bottom:14px;">
-        <div style="font-weight:700; color:#475569; margin-bottom:4px;">📝 具體活動說明：</div>
-        <div id="detail-desc" style="background:#f8fafc; padding:12px; border-radius:10px; border:1px solid #e2e8f0; white-space:pre-wrap; color:#334155;">--</div>
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-          <span>👥 已報名成員名冊 (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
-          <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 10px; font-size:12px;">
-            🏷️ @標記成員
-          </button>
-        </div>
-        <div id="detail-attendees" style="background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0; max-height:140px; overflow-y:auto; display:flex; flex-wrap:wrap; gap:6px;">
-          <!-- Attendees -->
-        </div>
-      </div>
-
-      <!-- History Update Logs -->
-      <div>
-        <div style="font-weight:700; color:#475569; margin-bottom:6px;">📜 編輯與更新歷史紀錄：</div>
-        <div id="detail-history-list" class="history-box">
-          <!-- History log items -->
-        </div>
-      </div>
-
-      <div style="display:flex; gap:10px; margin-top:20px;">
+      <div class="modal-footer" style="display:flex; gap:10px;">
         <button id="btn-delete-event" class="line-btn btn-delete" style="flex:1;">
           🗑️ 刪除活動
         </button>
@@ -909,29 +937,24 @@
     </div>
   </div>
 
-  <!-- Modal: Auto-Copy & Alert Notice -->
+  <!-- Minimal Modal: Auto-Copy Simplified Notification (極簡彈窗，無傳送按鈕) -->
   <div id="modal-copy-alert" class="modal-overlay">
-    <div class="modal-box" style="text-align:center;">
-      <div style="font-size:36px; margin-bottom:6px;">📋✅</div>
+    <div class="modal-box" style="text-align:center; height:auto; max-width:380px; padding:24px 20px;">
+      <div style="font-size:42px; margin-bottom:8px;">📋✅</div>
       <div style="font-size:18px; color:#0f172a; font-weight:800; margin-bottom:6px;">
-        已自動複製說明與標記文字！
+        已複製報名資訊！
       </div>
-      <p style="font-size:14px; color:#64748b; margin-bottom:12px;">
-        已將格式化內容複製到剪貼簿，請貼到 LINE 群組囉！
+      <p style="font-size:14px; color:#64748b; margin-bottom:14px; line-height:1.5;">
+        文字已自動複製到剪貼簿，請直接貼到群組和大家分享吧！
       </p>
 
-      <div id="alert-copied-text" class="alert-text-box">
-        <!-- Copied text content -->
+      <div id="alert-copied-text" class="alert-text-box" style="margin-bottom:18px; max-height:120px;">
+        <!-- Copied text preview -->
       </div>
 
-      <div style="display:flex; gap:10px; margin-top:16px;">
-        <button id="btn-line-share" class="line-btn btn-join" style="flex:1.2;">
-          📲 一鍵開啟 LINE 貼上
-        </button>
-        <button class="line-btn btn-detail" style="flex:1;" data-close="modal-copy-alert">
-          關閉
-        </button>
-      </div>
+      <button class="line-btn btn-join" style="width:100%; padding:12px; font-size:15px;" data-close="modal-copy-alert">
+        我知道了 (關閉)
+      </button>
     </div>
   </div>
 
@@ -942,19 +965,24 @@
         <span>⚙️ 切換測試身分</span>
         <button class="modal-close" data-close="modal-dev-profile">✕</button>
       </div>
-      <p style="font-size:13px; color:#64748b; margin-bottom:10px;">
-        選擇不同的測試使用者，模擬多人在群組報名與檢視名冊：
-      </p>
-      <div id="dev-profiles-container" class="dev-grid">
-        <!-- Rendered by JS -->
+      <div class="modal-form-body">
+        <p style="font-size:13px; color:#64748b; margin-bottom:10px;">
+          選擇不同的測試使用者，模擬多人在群組報名與檢視名冊：
+        </p>
+        <div id="dev-profiles-container" class="dev-grid">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+      <div class="modal-footer" style="text-align:right;">
+        <button class="line-btn btn-detail" data-close="modal-dev-profile">關閉</button>
       </div>
     </div>
   </div>
 
-  <!-- Embedded Core JS App Logic with Google Sheet Sync & Android Cross-Platform Robustness -->
+  <!-- Embedded Core JS App Logic with Stale-While-Revalidate Fast Loading & Fixed Modal Structure -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (CROSS-PLATFORM ROBUST LOGIC)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (PERFORMANCE OPTIMIZED)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -989,7 +1017,7 @@
     let currentFilter = "open";
     let activeEventId = null;
 
-    // --- CROSS-PLATFORM UTILS (Android & iOS) ---
+    // --- CROSS-PLATFORM UTILS ---
     function safeCopyText(text) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         return navigator.clipboard.writeText(text).catch(() => fallbackCopyText(text));
@@ -1026,16 +1054,23 @@
         : window.location.href;
     }
 
-    // --- 2. INITIALIZATION ---
-    document.addEventListener("DOMContentLoaded", async () => {
+    // --- 2. INITIALIZATION (0-Second Instant Rendering) ---
+    document.addEventListener("DOMContentLoaded", () => {
       checkDevModeVisibility();
+      
+      // 1. ⚡ 0秒瞬間載入快取資料 (畫面秒開不卡頓)
       loadLocalData();
-      setupEventListeners();
-      renderDevProfiles();
-      await initLIFF();
-      await fetchRemoteDataFromGAS();
       renderNoticeBoard();
       renderEvents();
+      setupEventListeners();
+      renderDevProfiles();
+
+      // 2. 🚀 背景非同步載入 LIFF & Google Sheet 遠端最新資料 (學員無感連線)
+      initLIFF();
+      fetchRemoteDataFromGAS().then(() => {
+        renderNoticeBoard();
+        renderEvents();
+      });
     });
 
     function checkDevModeVisibility() {
@@ -1054,7 +1089,6 @@
       const badgeEl = document.getElementById("login-badge");
       const loginBtn = document.getElementById("btn-login-action");
 
-      // 1. 本地快取的登入身分
       const cached = localStorage.getItem(CONFIG.USER_CACHE_KEY);
       if (cached) {
         try {
@@ -1063,7 +1097,6 @@
         } catch(e) {}
       }
 
-      // 2. LIFF SDK 初始化
       if (CONFIG.LIFF_ID && typeof liff !== "undefined") {
         try {
           await liff.init({ liffId: CONFIG.LIFF_ID });
@@ -1125,7 +1158,7 @@
       return true;
     }
 
-    // --- 4. GOOGLE SHEETS / GAS API SYNC (Android Cross-Domain Follow) ---
+    // --- 4. GOOGLE SHEETS / GAS API SYNC ---
     async function fetchRemoteDataFromGAS() {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
 
@@ -1420,11 +1453,6 @@
 
       document.getElementById("alert-copied-text").innerText = noticeShareText;
       openModal("modal-copy-alert");
-
-      document.getElementById("btn-line-share").onclick = () => {
-        const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(noticeShareText)}`;
-        window.open(lineShareUrl, "_blank");
-      };
     });
 
     // --- 9. BROADCAST ALL OPEN EVENTS ---
@@ -1471,11 +1499,6 @@ ${pageUrl}`;
 
       document.getElementById("alert-copied-text").innerText = broadcastText;
       openModal("modal-copy-alert");
-
-      document.getElementById("btn-line-share").onclick = () => {
-        const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(broadcastText)}`;
-        window.open(lineShareUrl, "_blank");
-      };
     }
 
     // --- 10. EXPORT ENDED EVENTS FUNCTION ---
@@ -1571,11 +1594,6 @@ ${pageUrl}`;
 
       document.getElementById("alert-copied-text").innerText = textToCopy;
       openModal("modal-copy-alert");
-
-      document.getElementById("btn-line-share").onclick = () => {
-        const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(textToCopy)}`;
-        window.open(lineShareUrl, "_blank");
-      };
     }
 
     // --- 13. EVENT CREATION ---
