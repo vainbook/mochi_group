@@ -159,10 +159,10 @@
       align-items: center;
     }
 
-    /* Navigation Pill Tabs */
+    /* Navigation Pill Tabs (僅保留：揪團中、已過期) */
     .nav-filters {
       display: flex;
-      gap: 6px;
+      gap: 8px;
       margin-bottom: 16px;
       overflow-x: auto;
       padding-bottom: 4px;
@@ -174,10 +174,10 @@
       backdrop-filter: blur(4px);
       border: none;
       color: #475569;
-      padding: 8px 16px;
+      padding: 8px 18px;
       border-radius: 20px;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       white-space: nowrap;
       transition: all 0.2s;
@@ -715,12 +715,10 @@
       </div>
     </section>
 
-    <!-- Navigation Tabs (Default: 報名中) -->
+    <!-- Navigation Pill Tabs (僅保留：揪團中、已過期) -->
     <nav class="nav-filters">
-      <button class="tab-btn active" data-filter="open">報名中</button>
-      <button class="tab-btn" data-filter="all">全部</button>
+      <button class="tab-btn active" data-filter="open">揪團中</button>
       <button class="tab-btn" data-filter="ended">已過期</button>
-      <button class="tab-btn" data-filter="my">我參加的</button>
       
       <button id="btn-export-ended" class="export-btn" style="display: none;">
         📋 匯出歷史紀錄
@@ -983,7 +981,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (STRICT CAPACITY ENFORCEMENT)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (TWO TABS & "揪團已滿" BUTTON)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1349,19 +1347,15 @@
 
       const sortedEvents = [...eventsData].sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
       
+      // 僅保留兩種分類：「open (揪團中)」 與 「ended (已過期)」
       const filteredEvents = sortedEvents.filter(evt => {
         const isEnded = parseSafeDate(evt.datetime) < new Date();
-        const maxCap = getMaxAttendees(evt);
-        const isFull = maxCap > 0 && evt.attendees.length >= maxCap;
 
         if (currentFilter === "open") {
-          return !isEnded && !isFull;
+          return !isEnded;
         }
         if (currentFilter === "ended") {
           return isEnded;
-        }
-        if (currentFilter === "my") {
-          return currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
         }
         return true;
       });
@@ -1382,14 +1376,14 @@
         const isAttending = currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
         
         let tagClass = "tag-open";
-        let tagText = "報名中";
+        let tagText = "揪團中";
         
         if (isEnded) {
           tagClass = "tag-ended";
           tagText = "已過期";
         } else if (isFull) {
           tagClass = "tag-full";
-          tagText = "已額滿";
+          tagText = "揪團已滿";
         }
 
         const formattedTime = parseSafeDate(evt.datetime).toLocaleString("zh-TW", {
@@ -1405,7 +1399,7 @@
         } else if (isAttending) {
           rsvpBtnHtml = `<button class="line-btn btn-cancel" onclick="toggleRSVP('${evt.id}')">取消參加</button>`;
         } else if (isFull) {
-          rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已額滿</button>`;
+          rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>揪團已滿</button>`;
         } else {
           rsvpBtnHtml = `<button class="line-btn btn-join" onclick="toggleRSVP('${evt.id}')">參加活動</button>`;
         }
@@ -1544,7 +1538,7 @@ ${pageUrl}`;
       openModal("modal-copy-alert");
     }
 
-    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION (嚴格解析型態與容量卡死) ---
+    // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
     async function toggleRSVP(eventId) {
       if (isProcessingRSVP) return; // 鎖住連擊
       if (!ensureLoggedIn()) return;
@@ -1568,7 +1562,7 @@ ${pageUrl}`;
       } else {
         const maxCap = getMaxAttendees(evt);
         if (maxCap > 0 && evt.attendees.length >= maxCap) {
-          alert(`⚠️ 此活動人數已額滿（上限 ${maxCap} 人），無法再新增報名！`);
+          alert(`⚠️ 此活動揪團已滿（上限 ${maxCap} 人），無法再新增報名！`);
           isProcessingRSVP = false;
           return;
         }
