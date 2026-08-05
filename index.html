@@ -457,7 +457,7 @@
       background: #e6a600;
     }
 
-    /* Fixed Modal Structure (視窗完全固定，不追著格子跑) */
+    /* Native Full Screen Sheet Modal */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -470,17 +470,9 @@
       justify-content: center;
       align-items: flex-end;
       z-index: 1000;
-      padding: 0;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
-    }
-
-    @media (min-width: 600px) {
-      .modal-overlay {
-        align-items: center;
-        padding: 16px;
-      }
     }
 
     .modal-overlay.active {
@@ -490,37 +482,45 @@
 
     .modal-box {
       width: 100%;
-      max-width: 500px;
-      height: 82vh; /* 固定高度，防止鍵盤跳動時畫面追著跑 */
-      max-height: 580px;
+      max-width: 600px;
+      height: 100vh;
+      max-height: 100vh;
       background: #ffffff;
-      border-radius: 20px 20px 0 0;
-      padding: 20px 18px;
+      border-radius: 0;
+      padding: 0;
       box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     @media (min-width: 600px) {
+      .modal-overlay {
+        align-items: center;
+        padding: 16px;
+      }
       .modal-box {
         border-radius: 20px;
-        padding: 24px;
         height: auto;
         max-height: 85vh;
       }
     }
 
-    .modal-title {
+    .modal-header {
       flex-shrink: 0;
-      font-size: 19px;
-      font-weight: 800;
-      color: #0f172a;
-      margin-bottom: 12px;
-      padding-bottom: 10px;
+      background: #ffffff;
+      padding: 16px 18px;
       border-bottom: 1px solid #f1f5f9;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      z-index: 10;
+    }
+
+    .modal-title-text {
+      font-size: 19px;
+      font-weight: 800;
+      color: #0f172a;
     }
 
     .modal-close {
@@ -547,25 +547,25 @@
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding-right: 4px;
+      padding: 18px;
     }
 
     .modal-footer {
       flex-shrink: 0;
-      padding-top: 12px;
-      margin-top: 8px;
+      padding: 14px 18px;
       border-top: 1px solid #f1f5f9;
       background: #ffffff;
+      z-index: 10;
     }
 
     /* Form Inputs */
     .form-group {
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
 
     .form-label {
       display: block;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       color: #475569;
       margin-bottom: 6px;
@@ -598,7 +598,7 @@
     }
 
     .line-textarea {
-      min-height: 90px;
+      min-height: 100px;
       resize: vertical;
     }
 
@@ -746,15 +746,15 @@
   <!-- Modal: Edit Top Announcement / Notice -->
   <div id="modal-edit-notice" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">
-        <span>📌 發表/更新頂部公告</span>
+      <div class="modal-header">
+        <span class="modal-title-text">📌 發表/更新頂部公告</span>
         <button class="modal-close" data-close="modal-edit-notice">✕</button>
       </div>
-      <form id="form-edit-notice" style="display:flex; flex-direction:column; flex:1;">
+      <form id="form-edit-notice" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
           <div class="form-group">
             <label class="form-label">公告內容 (發布後會更新至頂部，並留存留言紀錄)</label>
-            <textarea id="input-notice-text" class="line-textarea" style="min-height:120px;" placeholder="寫下要提醒群組大家的注意事項..." required></textarea>
+            <textarea id="input-notice-text" class="line-textarea" style="min-height:140px;" placeholder="寫下要提醒群組大家的注意事項..." required></textarea>
           </div>
         </div>
         <div class="modal-footer" style="display:flex; gap:10px;">
@@ -768,8 +768,8 @@
   <!-- Modal: Notice History Logs -->
   <div id="modal-notice-history" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">
-        <span>📜 頂部公告歷史留言紀錄</span>
+      <div class="modal-header">
+        <span class="modal-title-text">📜 頂部公告歷史留言紀錄</span>
         <button class="modal-close" data-close="modal-notice-history">✕</button>
       </div>
       <div class="modal-form-body">
@@ -783,14 +783,14 @@
     </div>
   </div>
 
-  <!-- Modal: Create Event (Fixed Layout, 不會追著格子跑) -->
+  <!-- Modal: Create Event -->
   <div id="modal-create" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">
-        <span>➕ 創立活動</span>
+      <div class="modal-header">
+        <span class="modal-title-text">➕ 創立新活動</span>
         <button class="modal-close" data-close="modal-create">✕</button>
       </div>
-      <form id="form-create-event" style="display:flex; flex-direction:column; flex:1;">
+      <form id="form-create-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
           <div class="form-group">
             <label class="form-label">活動名稱 *</label>
@@ -823,7 +823,7 @@
         </div>
         <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-create">取消</button>
-          <button type="submit" class="line-btn btn-join" style="flex:1.5;">⚡ 發布活動</button>
+          <button type="submit" class="line-btn btn-join" style="flex:1.5; padding:12px;">⚡ 發布活動</button>
         </div>
       </form>
     </div>
@@ -832,11 +832,11 @@
   <!-- Modal: Edit Event -->
   <div id="modal-edit" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">
-        <span>✏️ 編輯活動內容</span>
+      <div class="modal-header">
+        <span class="modal-title-text">✏️ 編輯活動內容</span>
         <button class="modal-close" data-close="modal-edit">✕</button>
       </div>
-      <form id="form-edit-event" style="display:flex; flex-direction:column; flex:1;">
+      <form id="form-edit-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
           <div class="form-group">
             <label class="form-label">活動名稱 *</label>
@@ -869,7 +869,7 @@
         </div>
         <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-edit">取消</button>
-          <button type="submit" class="line-btn btn-join" style="flex:1.5;">💾 儲存並更新通報</button>
+          <button type="submit" class="line-btn btn-join" style="flex:1.5; padding:12px;">💾 儲存並更新通報</button>
         </div>
       </form>
     </div>
@@ -878,8 +878,8 @@
   <!-- Modal: Event Detail & History Logs -->
   <div id="modal-detail" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">
-        <span id="detail-title">📖 活動詳情</span>
+      <div class="modal-header">
+        <span id="detail-title" class="modal-title-text">📖 活動詳情</span>
         <div style="display:flex; gap:6px;">
           <button id="btn-trigger-edit" class="line-btn btn-edit" style="padding:4px 10px; font-size:12px;">✏️ 編輯內容</button>
           <button class="modal-close" data-close="modal-detail">✕</button>
@@ -937,9 +937,9 @@
     </div>
   </div>
 
-  <!-- Minimal Modal: Auto-Copy Simplified Notification (極簡彈窗，無傳送按鈕) -->
+  <!-- Minimal Modal: Auto-Copy Simplified Notification -->
   <div id="modal-copy-alert" class="modal-overlay">
-    <div class="modal-box" style="text-align:center; height:auto; max-width:380px; padding:24px 20px;">
+    <div class="modal-box" style="text-align:center; height:auto; max-height:90vh; max-width:380px; padding:24px 20px; border-radius:20px;">
       <div style="font-size:42px; margin-bottom:8px;">📋✅</div>
       <div style="font-size:18px; color:#0f172a; font-weight:800; margin-bottom:6px;">
         已複製報名資訊！
@@ -961,8 +961,8 @@
   <!-- Modal: DEV Profile Switcher -->
   <div id="modal-dev-profile" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">
-        <span>⚙️ 切換測試身分</span>
+      <div class="modal-header">
+        <span class="modal-title-text">⚙️ 切換測試身分</span>
         <button class="modal-close" data-close="modal-dev-profile">✕</button>
       </div>
       <div class="modal-form-body">
@@ -979,10 +979,10 @@
     </div>
   </div>
 
-  <!-- Embedded Core JS App Logic with Stale-While-Revalidate Fast Loading & Fixed Modal Structure -->
+  <!-- Embedded Core JS App Logic with Sync Delete to GAS -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (PERFORMANCE OPTIMIZED)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (SYNC DELETE FIXED)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1054,18 +1054,16 @@
         : window.location.href;
     }
 
-    // --- 2. INITIALIZATION (0-Second Instant Rendering) ---
+    // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", () => {
       checkDevModeVisibility();
       
-      // 1. ⚡ 0秒瞬間載入快取資料 (畫面秒開不卡頓)
       loadLocalData();
       renderNoticeBoard();
       renderEvents();
       setupEventListeners();
       renderDevProfiles();
 
-      // 2. 🚀 背景非同步載入 LIFF & Google Sheet 遠端最新資料 (學員無感連線)
       initLIFF();
       fetchRemoteDataFromGAS().then(() => {
         renderNoticeBoard();
@@ -1705,7 +1703,7 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(evt, "編輯更新了活動內容！");
     });
 
-    // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE ---
+    // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE (SYNC DELETE FIXED) ---
     function openDetailModal(eventId) {
       activeEventId = eventId;
       const evt = eventsData.find(e => e.id === eventId);
@@ -1806,11 +1804,13 @@ ${mentionsText}
         }
       };
 
+      // 🗑️ 刪除活動（同步刪除 Google Sheet 欄位修正）
       document.getElementById("btn-delete-event").onclick = () => {
         if (!ensureLoggedIn()) return;
         if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
           eventsData = eventsData.filter(e => e.id !== eventId);
           saveLocalEvents();
+          sendPostToGAS({ action: "deleteEvent", eventId: eventId }); // 傳送刪除命令至 GAS
           renderEvents();
           closeModal("modal-detail");
           alert("已成功刪除活動！");
