@@ -126,6 +126,44 @@
       color: #ffffff;
     }
 
+    /* Central Sync Clock Prompt Notice */
+    .sync-clock-prompt {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      transition: all 0.4s ease;
+    }
+
+    .sync-clock-prompt.hidden {
+      opacity: 0;
+      max-height: 0;
+      padding: 0;
+      margin-bottom: 0;
+      border: none;
+      overflow: hidden;
+    }
+
+    .clock-spinner {
+      display: inline-block;
+      animation: clock-rotate 2s linear infinite;
+    }
+
+    @keyframes clock-rotate {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     /* Top Announcement Notice Board */
     .notice-board {
       background: #ffffff;
@@ -700,6 +738,12 @@
       </div>
     </header>
 
+    <!-- Central Sync Clock Prompt Notice (中間時鐘提醒) -->
+    <div id="sync-clock-notice" class="sync-clock-prompt">
+      <span class="clock-spinner">⏳</span>
+      <span id="sync-clock-text">正在連線雲端同步最新活動...</span>
+    </div>
+
     <!-- Top Announcement Board -->
     <section class="notice-board">
       <div class="notice-title-row">
@@ -984,7 +1028,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (3-SEC HARD TIMEOUT RACE)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (SYNC CLOCK PROMPT & TIMEOUT)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1091,15 +1135,44 @@
       }
     }
 
+    function setSyncClockPrompt(status, messageText) {
+      const clockNoticeEl = document.getElementById("sync-clock-notice");
+      const clockTextEl = document.getElementById("sync-clock-text");
+      if (!clockNoticeEl || !clockTextEl) return;
+
+      if (status === "hide") {
+        clockNoticeEl.classList.add("hidden");
+        return;
+      }
+
+      clockNoticeEl.classList.remove("hidden");
+      clockTextEl.innerText = messageText;
+
+      if (status === "syncing") {
+        clockNoticeEl.style.background = "rgba(255, 255, 255, 0.95)";
+        clockNoticeEl.style.borderColor = "#cbd5e1";
+        clockNoticeEl.style.color = "#475569";
+      } else if (status === "done") {
+        clockNoticeEl.style.background = "var(--line-green-light)";
+        clockNoticeEl.style.borderColor = "var(--line-green)";
+        clockNoticeEl.style.color = "var(--line-green-dark)";
+      } else if (status === "offline") {
+        clockNoticeEl.style.background = "#fff7ed";
+        clockNoticeEl.style.borderColor = "#ffb800";
+        clockNoticeEl.style.color = "#c2410c";
+      }
+    }
+
     // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", () => {
       checkDevModeVisibility();
       
       loadLocalData();
       renderNoticeBoard();
-      renderEvents(); // ⚡ 0.01 秒立刻先渲染實體卡片！
+      renderEvents(); // ⚡ 0.01 秒立刻渲染本地畫面
 
       updateSyncBadge("🔄 同步中...", false);
+      setSyncClockPrompt("syncing", "⏳ 正在連線雲端同步最新活動...");
 
       setupEventListeners();
       renderDevProfiles();
@@ -1107,11 +1180,19 @@
 
       initLIFF();
 
-      // 最多等 2.5 秒超時鎖，絕對不卡住！
-      fetchRemoteDataFromGAS().finally(() => {
+      // 最多等 2.5 秒超時鎖
+      fetchRemoteDataFromGAS().then(isSuccess => {
         renderNoticeBoard();
         renderEvents();
-        updateSyncBadge("已連動", true);
+
+        if (isSuccess) {
+          updateSyncBadge("✅ 已連動", true);
+          setSyncClockPrompt("done", "✅ 已成功連動最新雲端資料");
+          setTimeout(() => setSyncClockPrompt("hide"), 1500);
+        } else {
+          updateSyncBadge("⚠️ 離線模式", false);
+          setSyncClockPrompt("offline", "⏳ 目前為離線檢視模式 (顯示手機儲存資料)");
+        }
       });
     });
 
@@ -1191,7 +1272,7 @@
 
     function ensureLoggedIn() {
       if (typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
-        if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
+        if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否廢話登入？")) {
           liff.login();
         }
         return false;
@@ -1203,9 +1284,9 @@
       return true;
     }
 
-    // --- 4. GOOGLE SHEETS / GAS API SYNC (WITH 2.5s HARD TIMEOUT RACE) ---
+    // --- 4. GOOGLE SHEETS / GAS API SYNC ---
     async function fetchRemoteDataFromGAS() {
-      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return;
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
 
       const fetchPromise = fetch(CONFIG.GAS_API_URL, { redirect: "follow" }).then(res => res.json());
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500));
@@ -1215,7 +1296,6 @@
         
         if (data && data.status === "success") {
           if (data.events && Array.isArray(data.events)) {
-            // 🛡️ 智慧合併保護
             eventsData = data.events.map(remoteEvt => {
               const localEvt = eventsData.find(l => l.id === remoteEvt.id);
               if (localEvt && currentUser) {
@@ -1237,10 +1317,12 @@
             noticeData.history = data.noticeHistory || noticeData.history;
             saveLocalNotice();
           }
+          return true;
         }
       } catch (err) {
         console.warn("GAS fetch timeout fallback:", err);
       }
+      return false;
     }
 
     async function sendPostToGAS(payload) {
@@ -1901,7 +1983,7 @@ ${pageUrl}`;
         deleteBtn.style.display = "block";
         deleteBtn.onclick = () => {
           if (!ensureLoggedIn()) return;
-          if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
+          if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可複原。`)) {
             eventsData = eventsData.filter(e => e.id !== eventId);
             saveLocalEvents();
             sendPostToGAS({ action: "deleteEvent", eventId: eventId });
