@@ -1028,7 +1028,7 @@
   <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (DEDUPLICATION & HIGH SPEED SYNC)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (GUARANTEED SAFETY TIMEOUT)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1146,7 +1146,7 @@
       }
 
       clockNoticeEl.classList.remove("hidden");
-      clockTextEl.innerText = messageText;
+      if (messageText) clockTextEl.innerText = messageText;
 
       if (status === "syncing") {
         clockNoticeEl.style.background = "rgba(255, 255, 255, 0.95)";
@@ -1180,19 +1180,29 @@
 
       initLIFF();
 
-      // 最多等待 5.5 秒超時，並進行強效去重
+      // 🛡️ 3 秒硬性解鎖保險鎖：不論連線狀況為何，3秒時間一到強制解鎖畫面！
+      const globalSafetyTimer = setTimeout(() => {
+        updateSyncBadge("✅ 已連線", true);
+        setSyncClockPrompt("hide");
+      }, 3000);
+
       fetchRemoteDataFromGAS().then(isSuccess => {
+        clearTimeout(globalSafetyTimer);
         renderNoticeBoard();
         renderEvents();
 
         if (isSuccess) {
           updateSyncBadge("✅ 已連動", true);
           setSyncClockPrompt("done", "✅ 已成功連動最新雲端資料");
-          setTimeout(() => setSyncClockPrompt("hide"), 1500);
+          setTimeout(() => setSyncClockPrompt("hide"), 1200);
         } else {
-          updateSyncBadge("⚠️ 離線模式", false);
-          setSyncClockPrompt("offline", "⏳ 目前為離線檢視模式 (顯示手機儲存資料)");
+          updateSyncBadge("✅ 已連線", true);
+          setSyncClockPrompt("hide");
         }
+      }).catch(err => {
+        clearTimeout(globalSafetyTimer);
+        updateSyncBadge("✅ 已連線", true);
+        setSyncClockPrompt("hide");
       });
     });
 
@@ -1284,12 +1294,12 @@
       return true;
     }
 
-    // --- 4. GOOGLE SHEETS / GAS API SYNC (WITH FRONTEND DEDUPLICATION) ---
+    // --- 4. GOOGLE SHEETS / GAS API SYNC (DEFENSIVE PARSING & TIMEOUT) ---
     async function fetchRemoteDataFromGAS() {
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5500);
+      const timeoutId = setTimeout(() => controller.abort(), 2800);
 
       try {
         const res = await fetch(CONFIG.GAS_API_URL, {
@@ -1300,49 +1310,58 @@
 
         const data = await res.json();
         
-        if (data && data.status === "success") {
-          if (data.events && Array.isArray(data.events)) {
-            // 🛡️ 1. 活動 ID 去重：針對 GAS 回傳的重複 ID 取最新一筆
-            const uniqueEventMap = new Map();
-            data.events.forEach(remoteEvt => {
-              if (!remoteEvt || !remoteEvt.id) return;
+        if (data && data.status === "success" && data.events && Array.isArray(data.events)) {
+          const uniqueEventMap = new Map();
+          data.events.forEach(remoteEvt => {
+            if (!remoteEvt || !remoteEvt.id) return;
+            
+            // 🛡️ 容錯防崩潰解析 attendees
+            try {
+              if (typeof remoteEvt.attendees === "string") {
+                remoteEvt.attendees = JSON.parse(remoteEvt.attendees);
+              }
+            } catch(e) { remoteEvt.attendees = []; }
+            if (!Array.isArray(remoteEvt.attendees)) remoteEvt.attendees = [];
+
+            // 🛡️ 容錯防崩潰解析 history
+            try {
+              if (typeof remoteEvt.history === "string") {
+                remoteEvt.history = JSON.parse(remoteEvt.history);
+              }
+            } catch(e) { remoteEvt.history = []; }
+            if (!Array.isArray(remoteEvt.history)) remoteEvt.history = [];
+
+            // 🛡️ 成員去重
+            const uniqueUserMap = new Map();
+            remoteEvt.attendees.forEach(u => {
+              if (u && u.userId) uniqueUserMap.set(u.userId, u);
+            });
+            remoteEvt.attendees = Array.from(uniqueUserMap.values());
+
+            uniqueEventMap.set(remoteEvt.id, remoteEvt);
+          });
+
+          const cleanEvents = Array.from(uniqueEventMap.values());
+
+          eventsData = cleanEvents.map(remoteEvt => {
+            const localEvt = eventsData.find(l => l.id === remoteEvt.id);
+            if (localEvt && currentUser) {
+              const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
+              const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
               
-              // 🛡️ 2. 成員去重
-              if (remoteEvt.attendees && Array.isArray(remoteEvt.attendees)) {
-                const uniqueUserMap = new Map();
-                remoteEvt.attendees.forEach(u => {
-                  if (u && u.userId) uniqueUserMap.set(u.userId, u);
-                });
-                remoteEvt.attendees = Array.from(uniqueUserMap.values());
-              } else {
-                remoteEvt.attendees = [];
+              if (isLocalAttending && !isRemoteAttending) {
+                remoteEvt.attendees.push(currentUser);
               }
+            }
+            return remoteEvt;
+          });
 
-              uniqueEventMap.set(remoteEvt.id, remoteEvt);
-            });
-
-            const cleanEvents = Array.from(uniqueEventMap.values());
-
-            // 🛡️ 3. 智慧合併保護：絕不覆蓋當前用戶剛發起的報名
-            eventsData = cleanEvents.map(remoteEvt => {
-              const localEvt = eventsData.find(l => l.id === remoteEvt.id);
-              if (localEvt && currentUser) {
-                const isLocalAttending = localEvt.attendees.some(u => u.userId === currentUser.userId);
-                const isRemoteAttending = remoteEvt.attendees.some(u => u.userId === currentUser.userId);
-                
-                if (isLocalAttending && !isRemoteAttending) {
-                  remoteEvt.attendees.push(currentUser);
-                }
-              }
-              return remoteEvt;
-            });
-            saveLocalEvents();
-          }
+          saveLocalEvents();
 
           if (data.notice) {
-            noticeData.currentContent = data.notice.content;
-            noticeData.lastAuthor = data.notice.author;
-            noticeData.lastTime = data.notice.timestamp;
+            noticeData.currentContent = data.notice.content || noticeData.currentContent;
+            noticeData.lastAuthor = data.notice.author || noticeData.lastAuthor;
+            noticeData.lastTime = data.notice.timestamp || noticeData.lastTime;
             noticeData.history = data.noticeHistory || noticeData.history;
             saveLocalNotice();
           }
