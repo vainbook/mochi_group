@@ -269,7 +269,7 @@
       background: #f1f5f9;
       border-radius: 10px;
       padding: 12px;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       font-size: 14px;
     }
 
@@ -322,21 +322,21 @@
       object-fit: cover;
     }
 
-    /* Card Buttons Grid */
+    /* Card Buttons Grid (按鈕尺寸調小巧精緻) */
     .card-actions {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-      gap: 8px;
-      margin-top: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 6px;
+      margin-top: 10px;
     }
 
     .line-btn {
       font-family: var(--font-line);
-      padding: 9px 12px;
-      font-size: 14px;
+      padding: 6px 10px; /* 縮小按鈕內距 */
+      font-size: 13px;  /* 縮小按鈕字體 */
       font-weight: 700;
       border: none;
-      border-radius: 10px;
+      border-radius: 8px;
       cursor: pointer;
       text-align: center;
       text-decoration: none;
@@ -405,7 +405,7 @@
       color: #7f1d1d;
     }
 
-    /* Floating Action Button (FAB) Group */
+    /* Floating Action Button (FAB) Group (純文字，無 Icon) */
     .fab-group {
       position: fixed;
       bottom: 20px;
@@ -419,17 +419,17 @@
 
     .fab-btn {
       border: none;
-      padding: 12px 20px;
+      padding: 10px 18px;
       border-radius: 30px;
       font-family: var(--font-line);
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
       transition: transform 0.2s, background 0.2s;
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
       white-space: nowrap;
     }
 
@@ -440,7 +440,7 @@
     .fab-add {
       background: var(--line-green);
       color: #ffffff;
-      box-shadow: 0 6px 20px rgba(6, 199, 85, 0.4);
+      box-shadow: 0 4px 16px rgba(6, 199, 85, 0.4);
     }
 
     .fab-add:hover {
@@ -450,20 +450,20 @@
     .fab-broadcast {
       background: #ffb800;
       color: #0f172a;
-      box-shadow: 0 6px 20px rgba(255, 184, 0, 0.4);
+      box-shadow: 0 4px 16px rgba(255, 184, 0, 0.4);
     }
 
     .fab-broadcast:hover {
       background: #e6a600;
     }
 
-    /* Native Full Screen Sheet Modal */
+    /* Native Full Screen Sheet Modal (根治手機鍵盤遮擋與卡住問題) */
     .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
+      right: 0;
+      bottom: 0;
       background: rgba(15, 23, 42, 0.6);
       backdrop-filter: blur(4px);
       display: flex;
@@ -483,8 +483,8 @@
     .modal-box {
       width: 100%;
       max-width: 600px;
-      height: 100vh;
-      max-height: 100vh;
+      height: 100%;
+      max-height: 100%;
       background: #ffffff;
       border-radius: 0;
       padding: 0;
@@ -543,11 +543,13 @@
       color: #0f172a;
     }
 
+    /* 極致流暢的滾動區，預留 90px 底部空間，確保最後一格永遠拉得出來 */
     .modal-form-body {
-      flex: 1;
-      overflow-y: auto;
+      flex: 1 1 auto;
+      overflow-y: scroll;
       -webkit-overflow-scrolling: touch;
-      padding: 18px;
+      touch-action: pan-y;
+      padding: 18px 18px 90px 18px;
     }
 
     .modal-footer {
@@ -733,13 +735,13 @@
 
   </div>
 
-  <!-- Floating Action Buttons Group -->
+  <!-- Floating Action Buttons Group (純文字，無圖示) -->
   <div class="fab-group">
     <button id="btn-broadcast-all" class="fab-btn fab-broadcast">
-      <span>📣 一鍵宣傳</span>
+      <span>一鍵宣傳</span>
     </button>
     <button id="fab-add-event" class="fab-btn fab-add">
-      <span>➕ 創立活動</span>
+      <span>創立活動</span>
     </button>
   </div>
 
@@ -747,7 +749,7 @@
   <div id="modal-edit-notice" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">📌 發表/更新頂部公告</span>
+        <span class="modal-title-text">發表/更新頂部公告</span>
         <button class="modal-close" data-close="modal-edit-notice">✕</button>
       </div>
       <form id="form-edit-notice" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
@@ -759,7 +761,7 @@
         </div>
         <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-edit-notice">取消</button>
-          <button type="submit" class="line-btn btn-join" style="flex:1.5;">📢 發布公告並複製通報</button>
+          <button type="submit" class="line-btn btn-join" style="flex:1.5;">發布公告並複製通報</button>
         </div>
       </form>
     </div>
@@ -769,7 +771,7 @@
   <div id="modal-notice-history" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">📜 頂部公告歷史留言紀錄</span>
+        <span class="modal-title-text">頂部公告歷史留言紀錄</span>
         <button class="modal-close" data-close="modal-notice-history">✕</button>
       </div>
       <div class="modal-form-body">
@@ -783,11 +785,11 @@
     </div>
   </div>
 
-  <!-- Modal: Create Event -->
+  <!-- Modal: Create Event (純防卡死順暢拉動版) -->
   <div id="modal-create" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">➕ 創立新活動</span>
+        <span class="modal-title-text">創立新活動</span>
         <button class="modal-close" data-close="modal-create">✕</button>
       </div>
       <form id="form-create-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
@@ -823,7 +825,7 @@
         </div>
         <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-create">取消</button>
-          <button type="submit" class="line-btn btn-join" style="flex:1.5; padding:12px;">⚡ 發布活動</button>
+          <button type="submit" class="line-btn btn-join" style="flex:1.5; padding:10px;">發布活動</button>
         </div>
       </form>
     </div>
@@ -833,7 +835,7 @@
   <div id="modal-edit" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">✏️ 編輯活動內容</span>
+        <span class="modal-title-text">編輯活動內容</span>
         <button class="modal-close" data-close="modal-edit">✕</button>
       </div>
       <form id="form-edit-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
@@ -869,7 +871,7 @@
         </div>
         <div class="modal-footer" style="display:flex; gap:10px;">
           <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-edit">取消</button>
-          <button type="submit" class="line-btn btn-join" style="flex:1.5; padding:12px;">💾 儲存並更新通報</button>
+          <button type="submit" class="line-btn btn-join" style="flex:1.5; padding:10px;">儲存並更新通報</button>
         </div>
       </form>
     </div>
@@ -879,9 +881,9 @@
   <div id="modal-detail" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <span id="detail-title" class="modal-title-text">📖 活動詳情</span>
+        <span id="detail-title" class="modal-title-text">活動詳情</span>
         <div style="display:flex; gap:6px;">
-          <button id="btn-trigger-edit" class="line-btn btn-edit" style="padding:4px 10px; font-size:12px;">✏️ 編輯內容</button>
+          <button id="btn-trigger-edit" class="line-btn btn-edit" style="padding:4px 8px; font-size:12px;">編輯內容</button>
           <button class="modal-close" data-close="modal-detail">✕</button>
         </div>
       </div>
@@ -896,7 +898,7 @@
           <div style="display:flex; align-items:center; gap:8px;">
             <strong>👑 主揪：</strong>
             <input type="text" id="detail-host-input" class="line-input" style="padding:4px 8px; font-size:13px; width:150px; height:32px;">
-            <button id="btn-save-host" class="line-btn btn-join" style="padding:4px 10px; font-size:12px;">儲存</button>
+            <button id="btn-save-host" class="line-btn btn-join" style="padding:4px 8px; font-size:12px;">儲存</button>
           </div>
         </div>
 
@@ -908,8 +910,8 @@
         <div style="margin-bottom:14px;">
           <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
             <span>👥 已報名成員名冊 (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
-            <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 10px; font-size:12px;">
-              🏷️ @標記成員
+            <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
+              @標記成員
             </button>
           </div>
           <div id="detail-attendees" style="background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0; max-height:140px; overflow-y:auto; display:flex; flex-wrap:wrap; gap:6px;">
@@ -928,7 +930,7 @@
 
       <div class="modal-footer" style="display:flex; gap:10px;">
         <button id="btn-delete-event" class="line-btn btn-delete" style="flex:1;">
-          🗑️ 刪除活動
+          刪除活動
         </button>
         <button class="line-btn btn-detail" style="flex:1;" data-close="modal-detail">
           關閉視窗
@@ -952,7 +954,7 @@
         <!-- Copied text preview -->
       </div>
 
-      <button class="line-btn btn-join" style="width:100%; padding:12px; font-size:15px;" data-close="modal-copy-alert">
+      <button class="line-btn btn-join" style="width:100%; padding:10px; font-size:14px;" data-close="modal-copy-alert">
         我知道了 (關閉)
       </button>
     </div>
@@ -979,10 +981,10 @@
     </div>
   </div>
 
-  <!-- Embedded Core JS App Logic with Sync Delete to GAS -->
+  <!-- Embedded Core JS App Logic -->
   <script>
     /* ==========================================================================
-       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (SYNC DELETE FIXED)
+       NATIVE LINE CHAT UI EVENT BULLETIN BOARD (UI OPTIMIZED & NO-ICON FAB)
        ========================================================================== */
 
     // --- 1. CONFIG & STATE ---
@@ -1063,6 +1065,7 @@
       renderEvents();
       setupEventListeners();
       renderDevProfiles();
+      setupInputFocusScroll();
 
       initLIFF();
       fetchRemoteDataFromGAS().then(() => {
@@ -1070,6 +1073,17 @@
         renderEvents();
       });
     });
+
+    // 解決手機輸入框被鍵盤擠壓卡住的自動滾動增強
+    function setupInputFocusScroll() {
+      document.querySelectorAll("input, textarea").forEach(el => {
+        el.addEventListener("focus", () => {
+          setTimeout(() => {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 300);
+        });
+      });
+    }
 
     function checkDevModeVisibility() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -1109,14 +1123,14 @@
             badgeEl.innerText = "已連動 LINE";
             badgeEl.style.background = "var(--line-green-light)";
             badgeEl.style.color = "var(--line-green-dark)";
-            loginBtn.innerText = "✅ 已登入";
+            loginBtn.innerText = "已登入";
             loginBtn.style.borderColor = "var(--line-green)";
             loginBtn.onclick = null;
           } else {
             badgeEl.innerText = "未登入 LINE";
             badgeEl.style.background = "#fee2e2";
             badgeEl.style.color = "#dc2626";
-            loginBtn.innerText = "🔑 點此登入";
+            loginBtn.innerText = "點此登入";
             loginBtn.onclick = () => liff.login();
 
             if (!currentUser && liff.isInClient()) {
@@ -1310,7 +1324,7 @@
       return escapeHtml(locationStr);
     }
 
-    // --- 7. RENDER EVENTS & CARDS ---
+    // --- 7. RENDER EVENTS & CARDS (按鈕小巧化) ---
     function renderNoticeBoard() {
       document.getElementById("notice-text-content").innerText = noticeData.currentContent || "目前尚無公告。";
       document.getElementById("notice-author-info").innerText = `由 ${noticeData.lastAuthor || '管理員'} 發布`;
@@ -1382,11 +1396,11 @@
         if (isEnded) {
           rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
         } else if (isAttending) {
-          rsvpBtnHtml = `<button class="line-btn btn-cancel" onclick="toggleRSVP('${evt.id}')">💔 取消參加</button>`;
+          rsvpBtnHtml = `<button class="line-btn btn-cancel" onclick="toggleRSVP('${evt.id}')">取消參加</button>`;
         } else if (isFull) {
           rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已額滿</button>`;
         } else {
-          rsvpBtnHtml = `<button class="line-btn btn-join" onclick="toggleRSVP('${evt.id}')">⚡ 參加</button>`;
+          rsvpBtnHtml = `<button class="line-btn btn-join" onclick="toggleRSVP('${evt.id}')">參加活動</button>`;
         }
 
         const gcalUrl = generateGoogleCalendarUrl(evt);
@@ -1411,8 +1425,8 @@
 
           <div class="card-actions">
             ${rsvpBtnHtml}
-            <button class="line-btn btn-detail" onclick="openDetailModal('${evt.id}')">📖 查看詳情</button>
-            <a class="line-btn btn-calendar" href="${gcalUrl}" target="_blank">📅 加到行事曆</a>
+            <button class="line-btn btn-detail" onclick="openDetailModal('${evt.id}')">詳情</button>
+            <a class="line-btn btn-calendar" href="${gcalUrl}" target="_blank">加到行事曆</a>
           </div>
         `;
 
@@ -1703,7 +1717,7 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(evt, "編輯更新了活動內容！");
     });
 
-    // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE (SYNC DELETE FIXED) ---
+    // --- 16. DETAIL MODAL & @MENTION & EDIT / DELETE ---
     function openDetailModal(eventId) {
       activeEventId = eventId;
       const evt = eventsData.find(e => e.id === eventId);
@@ -1713,7 +1727,7 @@ ${pageUrl}`;
         year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short"
       });
 
-      document.getElementById("detail-title").innerText = `📖 ${evt.title}`;
+      document.getElementById("detail-title").innerText = evt.title;
       document.getElementById("detail-time").innerText = formattedTime;
       document.getElementById("detail-location").innerHTML = formatLocationHtml(evt.location);
       document.getElementById("detail-fee").innerText = evt.fee || "免費";
@@ -1810,7 +1824,7 @@ ${mentionsText}
         if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可復原。`)) {
           eventsData = eventsData.filter(e => e.id !== eventId);
           saveLocalEvents();
-          sendPostToGAS({ action: "deleteEvent", eventId: eventId }); // 傳送刪除命令至 GAS
+          sendPostToGAS({ action: "deleteEvent", eventId: eventId });
           renderEvents();
           closeModal("modal-detail");
           alert("已成功刪除活動！");
