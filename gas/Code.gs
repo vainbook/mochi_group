@@ -316,7 +316,7 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
 
   if (existingEvent) {
     assertActiveEvent_(existingEvent);
-    assertHostPermission_(existingEvent, actorUserId);
+    assertEditPermission_(existingEvent, payload);
   } else {
     const creatingHostId = getHostUserId_(payload);
     if (!actorUserId || !creatingHostId || actorUserId !== creatingHostId) {
@@ -906,6 +906,12 @@ function assertHostPermission_(eventItem, actorUserId) {
 
 function assertDeletePermission_(eventItem, payload) {
   const actorUserId = String(payload.actorUserId || payload.deletedByUserId || "");
+  if (verifyAdminPassword_(payload.adminPassword)) return;
+  assertHostPermission_(eventItem, actorUserId);
+}
+
+function assertEditPermission_(eventItem, payload) {
+  const actorUserId = String(payload.actorUserId || "");
   if (verifyAdminPassword_(payload.adminPassword)) return;
   assertHostPermission_(eventItem, actorUserId);
 }

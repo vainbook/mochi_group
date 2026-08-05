@@ -844,7 +844,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-06T01:19:45+08:00">v260806.0119</time>
+          <time class="version-label" datetime="2026-08-06T01:28:59+08:00">v260806.0128</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1168,7 +1168,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0119",
+      APP_VERSION: "v260806.0128",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1368,6 +1368,10 @@
     }
 
     function canCurrentUserDeleteEvent(evt) {
+      return isCurrentUserHost(evt) || currentUserCanDeleteAnyEvent;
+    }
+
+    function canCurrentUserEditEvent(evt) {
       return isCurrentUserHost(evt) || currentUserCanDeleteAnyEvent;
     }
 
@@ -2030,7 +2034,7 @@
           mutationId: payload.mutationId || `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           actorUserId: payload.actorUserId || currentUser?.userId || "",
           actorName: payload.actorName || currentUser?.displayName || "",
-          ...(payload.action === "deleteEvent" && currentUserCanDeleteAnyEvent
+          ...(["deleteEvent", "saveEvent"].includes(payload.action) && currentUserCanDeleteAnyEvent
             ? { adminPassword: currentAdminPassword }
             : {}),
           clientVersion: CONFIG.APP_VERSION
@@ -2745,8 +2749,8 @@ ${pageUrl}`;
       if (!activeEventId) return;
       const evt = eventsData.find(e => e.id === activeEventId);
       if (!evt) return;
-      if (!isCurrentUserHost(evt)) {
-        alert("只有目前主揪可以編輯內容！");
+      if (!canCurrentUserEditEvent(evt)) {
+        alert("只有目前主揪或管理員可以編輯內容！");
         closeModal("modal-edit");
         return;
       }
@@ -2830,7 +2834,7 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(evt, "update");
     });
 
-    // --- 16. DETAIL MODAL & @MENTION & HOST-ONLY DELETE ---
+    // --- 16. DETAIL MODAL, EDITING, @MENTION & DELETE ---
     function openDetailModal(eventId) {
       activeEventId = eventId;
       const evt = eventsData.find(e => e.id === eventId);
@@ -2840,6 +2844,7 @@ ${pageUrl}`;
       const formattedTime = getEventTimeText(evt);
       const maxCap = getMaxAttendees(evt);
       const isHost = isCurrentUserHost(evt);
+      const canEdit = canCurrentUserEditEvent(evt);
       const canDelete = canCurrentUserDeleteEvent(evt);
 
       document.getElementById("detail-title").innerText = evt.title;
@@ -2851,7 +2856,7 @@ ${pageUrl}`;
       const hostUser = getEventHostUser(evt);
       const hostDisplayName = evt.hostName || hostUser?.displayName || "未指定";
       document.getElementById("detail-host-name").innerText = hostDisplayName;
-      editBtn.style.display = isHost ? "flex" : "none";
+      editBtn.style.display = canEdit ? "flex" : "none";
       document.getElementById("detail-desc").innerText = evt.description || "尚無補充說明。";
       document.getElementById("detail-attendee-heading").innerText = isFixedGroup(evt)
         ? "固定團參與名冊"
@@ -2903,8 +2908,8 @@ ${pageUrl}`;
 
       editBtn.onclick = () => {
         if (!ensureLoggedIn()) return;
-        if (!isCurrentUserHost(evt)) {
-          alert("只有目前主揪可以編輯內容！");
+        if (!canCurrentUserEditEvent(evt)) {
+          alert("只有目前主揪或管理員可以編輯內容！");
           return;
         }
         closeModal("modal-detail");
