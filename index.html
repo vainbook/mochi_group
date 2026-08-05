@@ -77,7 +77,20 @@
       color: var(--line-green);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .version-label {
+      color: #64748b;
+      background: #f1f5f9;
+      border-radius: 999px;
+      padding: 3px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
     }
 
     .sync-status-badge {
@@ -119,6 +132,7 @@
       cursor: pointer;
       transition: all 0.2s;
       display: none;
+      min-height: 44px;
     }
 
     .dev-btn:hover {
@@ -164,52 +178,6 @@
       100% { transform: rotate(360deg); }
     }
 
-    /* Top Announcement Notice Board */
-    .notice-board {
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 14px 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-      border-left: 5px solid var(--line-yellow);
-    }
-
-    .notice-title-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .notice-title {
-      font-size: 15px;
-      font-weight: 800;
-      color: #0f172a;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .notice-content {
-      background: #fffbeb;
-      border: 1px solid #fef3c7;
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 14px;
-      color: #92400e;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      margin-bottom: 8px;
-    }
-
-    .notice-meta {
-      font-size: 11px;
-      color: #94a3b8;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
     /* Navigation Pill Tabs */
     .nav-filters {
       display: flex;
@@ -233,6 +201,7 @@
       white-space: nowrap;
       transition: all 0.2s;
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      min-height: 44px;
     }
 
     .tab-btn.active {
@@ -253,6 +222,7 @@
       margin-left: auto;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       white-space: nowrap;
+      min-height: 44px;
     }
 
     .export-btn:hover {
@@ -386,6 +356,7 @@
       justify-content: center;
       gap: 4px;
       transition: all 0.15s;
+      min-height: 44px;
     }
 
     .btn-join {
@@ -449,7 +420,7 @@
     /* Floating Action Button (FAB) Group (宣傳 & 揪團) */
     .fab-group {
       position: fixed;
-      bottom: 20px;
+      bottom: max(20px, env(safe-area-inset-bottom));
       right: 16px;
       display: flex;
       flex-direction: column;
@@ -472,6 +443,7 @@
       align-items: center;
       justify-content: center;
       white-space: nowrap;
+      min-height: 44px;
     }
 
     .fab-btn:hover {
@@ -514,11 +486,13 @@
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
+      visibility: hidden;
     }
 
     .modal-overlay.active {
       opacity: 1;
       pointer-events: auto;
+      visibility: visible;
     }
 
     .modal-box {
@@ -568,8 +542,8 @@
       background: #f1f5f9;
       border: none;
       color: #64748b;
-      width: 32px;
-      height: 32px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       font-size: 16px;
       font-weight: bold;
@@ -624,6 +598,7 @@
       font-size: 16px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
+      min-height: 44px;
     }
 
     input[type="datetime-local"].line-input {
@@ -724,6 +699,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>💬 群組活動布告欄</span>
+          <time class="version-label" datetime="2026-08-05T22:08:58+08:00">v260805.2208</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">🔄 同步中...</span>
       </div>
@@ -743,24 +719,6 @@
       <span class="clock-spinner">⏳</span>
       <span id="sync-clock-text">正在連線雲端同步最新活動...</span>
     </div>
-
-    <!-- Top Announcement Board -->
-    <section class="notice-board">
-      <div class="notice-title-row">
-        <div class="notice-title">📌 群組重要公告</div>
-        <div style="display:flex; gap:6px;">
-          <button id="btn-edit-notice" class="line-btn btn-edit" style="padding:3px 8px; font-size:12px;">✏️ 發表/修改</button>
-          <button id="btn-notice-history" class="line-btn btn-detail" style="padding:3px 8px; font-size:12px;">📜 歷史留言</button>
-        </div>
-      </div>
-      <div id="notice-text-content" class="notice-content">
-        載入公告中...
-      </div>
-      <div class="notice-meta">
-        <span id="notice-author-info">由 管理員 發布</span>
-        <span id="notice-time-info">--</span>
-      </div>
-    </section>
 
     <!-- Navigation Pill Tabs -->
     <nav class="nav-filters">
@@ -789,81 +747,41 @@
     </button>
   </div>
 
-  <!-- Modal: Edit Top Announcement / Notice -->
-  <div id="modal-edit-notice" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <span class="modal-title-text">發表/更新頂部公告</span>
-        <button class="modal-close" data-close="modal-edit-notice">✕</button>
-      </div>
-      <form id="form-edit-notice" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
-        <div class="modal-form-body">
-          <div class="form-group">
-            <label class="form-label">公告內容 (發布後會更新至頂部，並留存留言紀錄)</label>
-            <textarea id="input-notice-text" class="line-textarea" style="min-height:140px;" placeholder="寫下要提醒群組大家的注意事項..." required></textarea>
-          </div>
-        </div>
-        <div class="modal-footer" style="display:flex; gap:10px;">
-          <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-edit-notice">取消</button>
-          <button type="submit" class="line-btn btn-join" style="flex:1.5;">發布公告並複製通報</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Notice History Logs -->
-  <div id="modal-notice-history" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <span class="modal-title-text">頂部公告歷史留言紀錄</span>
-        <button class="modal-close" data-close="modal-notice-history">✕</button>
-      </div>
-      <div class="modal-form-body">
-        <div id="notice-history-container" class="history-box" style="max-height:100%;">
-          <!-- Rendered History -->
-        </div>
-      </div>
-      <div class="modal-footer" style="text-align:right;">
-        <button class="line-btn btn-detail" data-close="modal-notice-history">關閉</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Modal: Create Event (發起揪團) -->
-  <div id="modal-create" class="modal-overlay">
+  <div id="modal-create" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-create-event">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">發起揪團</span>
-        <button class="modal-close" data-close="modal-create">✕</button>
+        <span id="title-create-event" class="modal-title-text">發起揪團</span>
+        <button class="modal-close" data-close="modal-create" aria-label="關閉發起揪團視窗">✕</button>
       </div>
       <form id="form-create-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
           <div class="form-group">
-            <label class="form-label">活動名稱 *</label>
+            <label class="form-label" for="input-title">活動名稱 *</label>
             <input type="text" id="input-title" class="line-input" placeholder="例如：週末羽球同樂會" required>
           </div>
           <div class="form-group">
-            <label class="form-label">日期與時間 * (點擊選擇)</label>
+            <label class="form-label" for="input-datetime">日期與時間 * (點擊選擇)</label>
             <input type="datetime-local" id="input-datetime" class="line-input" required>
           </div>
           <div class="form-group">
-            <label class="form-label">活動地點 (選填，可輸入地址或貼上地圖網址)</label>
+            <label class="form-label" for="input-location">活動地點 (選填，可輸入地址或貼上地圖網址)</label>
             <input type="text" id="input-location" class="line-input" placeholder="例如：台北市立羽球館 (選填)">
           </div>
           <div class="form-group">
-            <label class="form-label">主揪 / 主辦人名稱</label>
+            <label class="form-label" for="input-host-name">主揪 / 主辦人名稱</label>
             <input type="text" id="input-host-name" class="line-input" placeholder="預設為當前 LINE 暱稱（可修改）">
           </div>
           <div class="form-group">
-            <label class="form-label">活動費用</label>
+            <label class="form-label" for="input-fee">活動費用</label>
             <input type="text" id="input-fee" class="line-input" placeholder="例如：$200 / 人 或 免費">
           </div>
           <div class="form-group">
-            <label class="form-label">人數上限 (0 代表無限制)</label>
+            <label class="form-label" for="input-max">人數上限 (0 代表無限制)</label>
             <input type="number" id="input-max" class="line-input" value="8" min="0">
           </div>
           <div class="form-group">
-            <label class="form-label">補充說明</label>
+            <label class="form-label" for="input-desc">補充說明</label>
             <textarea id="input-desc" class="line-textarea" placeholder="例如：請自備球拍、穿著運動鞋！"></textarea>
           </div>
         </div>
@@ -876,40 +794,40 @@
   </div>
 
   <!-- Modal: Edit Event -->
-  <div id="modal-edit" class="modal-overlay">
+  <div id="modal-edit" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-edit-event">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">編輯活動內容</span>
-        <button class="modal-close" data-close="modal-edit">✕</button>
+        <span id="title-edit-event" class="modal-title-text">編輯活動內容</span>
+        <button class="modal-close" data-close="modal-edit" aria-label="關閉活動編輯視窗">✕</button>
       </div>
       <form id="form-edit-event" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="modal-form-body">
           <div class="form-group">
-            <label class="form-label">活動名稱 *</label>
+            <label class="form-label" for="edit-title">活動名稱 *</label>
             <input type="text" id="edit-title" class="line-input" required>
           </div>
           <div class="form-group">
-            <label class="form-label">日期與時間 *</label>
+            <label class="form-label" for="edit-datetime">日期與時間 *</label>
             <input type="datetime-local" id="edit-datetime" class="line-input" required>
           </div>
           <div class="form-group">
-            <label class="form-label">活動地點 (選填)</label>
+            <label class="form-label" for="edit-location">活動地點 (選填)</label>
             <input type="text" id="edit-location" class="line-input">
           </div>
           <div class="form-group">
-            <label class="form-label">主揪名稱</label>
+            <label class="form-label" for="edit-host-name">主揪名稱</label>
             <input type="text" id="edit-host-name" class="line-input">
           </div>
           <div class="form-group">
-            <label class="form-label">活動費用</label>
+            <label class="form-label" for="edit-fee">活動費用</label>
             <input type="text" id="edit-fee" class="line-input">
           </div>
           <div class="form-group">
-            <label class="form-label">人數上限 (0 代表無限制)</label>
+            <label class="form-label" for="edit-max">人數上限 (0 代表無限制)</label>
             <input type="number" id="edit-max" class="line-input" min="0">
           </div>
           <div class="form-group">
-            <label class="form-label">補充說明</label>
+            <label class="form-label" for="edit-desc">補充說明</label>
             <textarea id="edit-desc" class="line-textarea"></textarea>
           </div>
         </div>
@@ -922,13 +840,13 @@
   </div>
 
   <!-- Modal: Event Detail & History Logs -->
-  <div id="modal-detail" class="modal-overlay">
+  <div id="modal-detail" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="detail-title">
     <div class="modal-box">
       <div class="modal-header">
         <span id="detail-title" class="modal-title-text">活動詳情</span>
         <div style="display:flex; gap:6px;">
           <button id="btn-trigger-edit" class="line-btn btn-edit" style="padding:4px 8px; font-size:12px;">編輯內容</button>
-          <button class="modal-close" data-close="modal-detail">✕</button>
+          <button class="modal-close" data-close="modal-detail" aria-label="關閉活動詳情視窗">✕</button>
         </div>
       </div>
       
@@ -940,7 +858,7 @@
           
           <!-- Editable Host Section -->
           <div style="display:flex; align-items:center; gap:8px;">
-            <strong>👑 主揪：</strong>
+            <label for="detail-host-input"><strong>👑 主揪：</strong></label>
             <input type="text" id="detail-host-input" class="line-input" style="padding:4px 8px; font-size:13px; width:150px; height:32px;">
             <button id="btn-save-host" class="line-btn btn-join" style="padding:4px 8px; font-size:12px;">儲存</button>
           </div>
@@ -984,10 +902,10 @@
   </div>
 
   <!-- Minimal Modal: Auto-Copy Simplified Notification -->
-  <div id="modal-copy-alert" class="modal-overlay">
+  <div id="modal-copy-alert" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-copy-alert">
     <div class="modal-box" style="text-align:center; height:auto; max-height:90vh; max-width:380px; padding:24px 20px; border-radius:20px;">
       <div style="font-size:42px; margin-bottom:8px;">📋✅</div>
-      <div style="font-size:18px; color:#0f172a; font-weight:800; margin-bottom:6px;">
+      <div id="title-copy-alert" style="font-size:18px; color:#0f172a; font-weight:800; margin-bottom:6px;">
         已複製報名資訊！
       </div>
       <p style="font-size:14px; color:#64748b; margin-bottom:14px; line-height:1.5;">
@@ -1005,11 +923,11 @@
   </div>
 
   <!-- Modal: DEV Profile Switcher -->
-  <div id="modal-dev-profile" class="modal-overlay">
+  <div id="modal-dev-profile" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-dev-profile">
     <div class="modal-box">
       <div class="modal-header">
-        <span class="modal-title-text">⚙️ 切換測試身分</span>
-        <button class="modal-close" data-close="modal-dev-profile">✕</button>
+        <span id="title-dev-profile" class="modal-title-text">⚙️ 切換測試身分</span>
+        <button class="modal-close" data-close="modal-dev-profile" aria-label="關閉測試身分視窗">✕</button>
       </div>
       <div class="modal-form-body">
         <p style="font-size:13px; color:#64748b; margin-bottom:10px;">
@@ -1037,7 +955,6 @@
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbyCGdKRapzB9v0hR54qHqnhrb37kwJjl4VoWIBtlFdn7QLJVCK8oU9708yTYCDcnaku/exec",
       STORAGE_KEY: "line_events_v6",
-      NOTICE_STORAGE_KEY: "line_top_notice_v1",
       USER_CACHE_KEY: "line_user_profile_v2"
     };
 
@@ -1050,15 +967,10 @@
     ];
 
     let currentUser = null;
+    let isAuthVerified = false;
+    let isDevMode = false;
+    let isLiffReady = false;
     let eventsData = [];
-    let noticeData = {
-      currentContent: "📌 歡迎使用群組活動布告欄！最新注意事項與群組規則將在此公開提醒。",
-      lastAuthor: "管理員",
-      lastTime: getFormattedNow(),
-      history: [
-        { author: "管理員", time: getFormattedNow(), content: "📌 歡迎使用群組活動布告欄！最新注意事項與群組規則將在此公開提醒。" }
-      ]
-    };
 
     let currentFilter = "open";
     let activeEventId = null;
@@ -1115,6 +1027,17 @@
       return isNaN(num) ? 0 : num;
     }
 
+    function isCurrentUserHost(evt) {
+      return Boolean(
+        isAuthVerified &&
+        currentUser &&
+        evt &&
+        evt.hostUser &&
+        evt.hostUser.userId &&
+        String(evt.hostUser.userId) === String(currentUser.userId)
+      );
+    }
+
     function getShareableUrl() {
       return (CONFIG.LIFF_URL && CONFIG.LIFF_URL.indexOf("liff.line.me") >= 0)
         ? CONFIG.LIFF_URL
@@ -1165,10 +1088,9 @@
 
     // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", () => {
-      checkDevModeVisibility();
+      isDevMode = checkDevModeVisibility();
       
       loadLocalData();
-      renderNoticeBoard();
       renderEvents(); // ⚡ 0.01 秒立刻渲染本地畫面
 
       updateSyncBadge("🔄 同步中...", false);
@@ -1179,16 +1101,18 @@
       setupInputFocusScroll();
 
       initLIFF();
+      runInitialSync();
+    });
 
-      // 🛡️ 3 秒硬性解鎖保險鎖：不論連線狀況為何，3秒時間一到強制解鎖畫面！
-      const globalSafetyTimer = setTimeout(() => {
-        updateSyncBadge("✅ 已連線", true);
+    async function runInitialSync() {
+      // ponytail: 兩秒後先解除等待感，雲端仍在背景完成；未來可升級成可取消的同步工作列。
+      const slowConnectionTimer = setTimeout(() => {
+        updateSyncBadge("📱 本機資料", false);
         setSyncClockPrompt("hide");
-      }, 3000);
+      }, 2000);
 
-      fetchRemoteDataFromGAS().then(isSuccess => {
-        clearTimeout(globalSafetyTimer);
-        renderNoticeBoard();
+      try {
+        const isSuccess = await fetchRemoteDataFromGAS();
         renderEvents();
 
         if (isSuccess) {
@@ -1196,15 +1120,19 @@
           setSyncClockPrompt("done", "✅ 已成功連動最新雲端資料");
           setTimeout(() => setSyncClockPrompt("hide"), 1200);
         } else {
-          updateSyncBadge("✅ 已連線", true);
-          setSyncClockPrompt("hide");
+          updateSyncBadge("⚠️ 離線資料", false);
+          setSyncClockPrompt("offline", "目前顯示本機資料，稍後重新開啟即可再同步");
+          setTimeout(() => setSyncClockPrompt("hide"), 2400);
         }
-      }).catch(err => {
-        clearTimeout(globalSafetyTimer);
-        updateSyncBadge("✅ 已連線", true);
-        setSyncClockPrompt("hide");
-      });
-    });
+      } catch (err) {
+        console.warn("Initial sync warning:", err);
+        updateSyncBadge("⚠️ 離線資料", false);
+        setSyncClockPrompt("offline", "目前顯示本機資料，稍後重新開啟即可再同步");
+        setTimeout(() => setSyncClockPrompt("hide"), 2400);
+      } finally {
+        clearTimeout(slowConnectionTimer);
+      }
+    }
 
     function setupInputFocusScroll() {
       document.querySelectorAll("input, textarea").forEach(el => {
@@ -1219,57 +1147,94 @@
     function checkDevModeVisibility() {
       const urlParams = new URLSearchParams(window.location.search);
       const isDevParam = urlParams.get('dev') === 'true';
+      const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+      const enabled = isDevParam && isLocalHost;
       const devBtn = document.getElementById("btn-dev-toggle");
-      if (isDevParam) {
+      if (enabled) {
         devBtn.style.display = "inline-block";
       } else {
         devBtn.style.display = "none";
       }
+      return enabled;
     }
 
     // --- 3. LIFF AUTH & PERSISTENT SESSION ---
     async function initLIFF() {
       const loginBtn = document.getElementById("btn-login-action");
 
-      const cached = localStorage.getItem(CONFIG.USER_CACHE_KEY);
-      if (cached) {
-        try {
-          currentUser = JSON.parse(cached);
-          updateUserUI();
-        } catch(e) {}
+      currentUser = null;
+      isAuthVerified = false;
+      isLiffReady = false;
+      updateUserUI();
+
+      if (isDevMode) {
+        const cached = localStorage.getItem(CONFIG.USER_CACHE_KEY);
+        let cachedProfile = null;
+        if (cached) {
+          try {
+            const cachedUser = JSON.parse(cached);
+            cachedProfile = DEV_PROFILES.find(profile => profile.userId === cachedUser.userId) || null;
+          } catch (e) {}
+        }
+        currentUser = cachedProfile || DEV_PROFILES[0];
+        isAuthVerified = true;
+        loginBtn.innerText = "本機測試模式";
+        loginBtn.disabled = true;
+        updateUserUI();
+        renderDevProfiles();
+        renderEvents();
+        return;
       }
 
-      if (CONFIG.LIFF_ID && typeof liff !== "undefined") {
-        try {
-          await liff.init({ liffId: CONFIG.LIFF_ID });
-          if (liff.isLoggedIn()) {
-            const profile = await liff.getProfile();
-            currentUser = {
-              userId: profile.userId,
-              displayName: profile.displayName,
-              pictureUrl: profile.pictureUrl || "https://api.dicebear.com/7.x/pixel-art/svg?seed=" + profile.displayName
-            };
-            localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
-            loginBtn.innerText = "已登入";
-            loginBtn.style.borderColor = "var(--line-green)";
-            loginBtn.onclick = null;
-          } else {
-            loginBtn.innerText = "點此登入";
-            loginBtn.onclick = () => liff.login();
+      loginBtn.disabled = false;
+      if (!CONFIG.LIFF_ID || typeof liff === "undefined") {
+        loginBtn.innerText = "登入服務未連線";
+        loginBtn.onclick = () => initLIFF();
+        updateUserUI();
+        return;
+      }
 
-            if (!currentUser && liff.isInClient()) {
-              liff.login();
-            }
+      try {
+        loginBtn.innerText = "連線登入中...";
+        loginBtn.disabled = true;
+        await Promise.race([
+          liff.init({ liffId: CONFIG.LIFF_ID }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("LIFF init timeout")), 6000))
+        ]);
+        isLiffReady = true;
+        loginBtn.disabled = false;
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          currentUser = {
+            userId: profile.userId,
+            displayName: profile.displayName,
+            pictureUrl: profile.pictureUrl || "https://api.dicebear.com/7.x/pixel-art/svg?seed=" + encodeURIComponent(profile.displayName)
+          };
+          isAuthVerified = true;
+          localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
+          loginBtn.innerText = "已登入";
+          loginBtn.style.borderColor = "var(--line-green)";
+          loginBtn.onclick = null;
+        } else {
+          localStorage.removeItem(CONFIG.USER_CACHE_KEY);
+          loginBtn.innerText = "點此登入";
+          loginBtn.onclick = () => liff.login();
+
+          if (liff.isInClient()) {
+            liff.login();
           }
-        } catch (err) {
-          console.warn("LIFF init warning:", err);
-          if (!currentUser) currentUser = DEV_PROFILES[0];
         }
-      } else {
-        if (!currentUser) currentUser = DEV_PROFILES[0];
+      } catch (err) {
+        console.warn("LIFF init warning:", err);
+        currentUser = null;
+        isAuthVerified = false;
+        loginBtn.disabled = false;
+        loginBtn.innerText = "重新連線登入";
+        loginBtn.onclick = () => initLIFF();
       }
 
       updateUserUI();
+      renderEvents();
     }
 
     function updateUserUI() {
@@ -1281,14 +1246,23 @@
     }
 
     function ensureLoggedIn() {
+      if (isDevMode && isAuthVerified && currentUser) return true;
+
+      if (!isAuthVerified || !currentUser) {
+        if (isLiffReady && typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
+          if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
+            liff.login();
+          }
+        } else {
+          alert("🔒 LINE 登入服務尚未連線，請稍後再試！");
+        }
+        return false;
+      }
+
       if (typeof liff !== "undefined" && liff.isLoggedIn && !liff.isLoggedIn()) {
         if (confirm("🔒 辦活動與報名參加需要連動 LINE 帳號，是否立即登入？")) {
           liff.login();
         }
-        return false;
-      }
-      if (!currentUser) {
-        alert("🔒 請先登入 LINE 帳號後再進行操作！");
         return false;
       }
       return true;
@@ -1299,14 +1273,14 @@
       if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2800);
+      // Apps Script 冷啟動可能超過數秒；畫面已先解除等待，讓同步留在背景完成。
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       try {
         const res = await fetch(CONFIG.GAS_API_URL, {
           signal: controller.signal,
           redirect: "follow"
         });
-        clearTimeout(timeoutId);
 
         const data = await res.json();
         
@@ -1330,6 +1304,12 @@
               }
             } catch(e) { remoteEvt.history = []; }
             if (!Array.isArray(remoteEvt.history)) remoteEvt.history = [];
+
+            try {
+              if (typeof remoteEvt.hostUser === "string") {
+                remoteEvt.hostUser = JSON.parse(remoteEvt.hostUser);
+              }
+            } catch(e) { remoteEvt.hostUser = null; }
 
             // 🛡️ 成員去重
             const uniqueUserMap = new Map();
@@ -1358,13 +1338,6 @@
 
           saveLocalEvents();
 
-          if (data.notice) {
-            noticeData.currentContent = data.notice.content || noticeData.currentContent;
-            noticeData.lastAuthor = data.notice.author || noticeData.lastAuthor;
-            noticeData.lastTime = data.notice.timestamp || noticeData.lastTime;
-            noticeData.history = data.noticeHistory || noticeData.history;
-            saveLocalNotice();
-          }
           return true;
         }
       } catch (err) {
@@ -1397,17 +1370,6 @@
     }
 
     // --- 5. LOCAL PERSISTENCE FALLBACK ---
-    function loadLocalNotice() {
-      const stored = localStorage.getItem(CONFIG.NOTICE_STORAGE_KEY);
-      if (stored) {
-        try { noticeData = JSON.parse(stored); } catch (e) {}
-      }
-    }
-
-    function saveLocalNotice() {
-      localStorage.setItem(CONFIG.NOTICE_STORAGE_KEY, JSON.stringify(noticeData));
-    }
-
     function loadLocalEvents() {
       const stored = localStorage.getItem(CONFIG.STORAGE_KEY);
       if (stored) {
@@ -1423,7 +1385,6 @@
 
     function loadLocalData() {
       loadLocalEvents();
-      loadLocalNotice();
     }
 
     function saveLocalEvents() {
@@ -1446,27 +1407,54 @@
       return `${month}/${date} ${hour}:${min}`;
     }
 
-    // --- 6. LOCATION URL AUTO-LINK FORMATTER ---
-    function formatLocationHtml(locationStr) {
-      if (!locationStr) return "線上 / 待定";
-      
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      if (urlRegex.test(locationStr)) {
-        return locationStr.replace(urlRegex, function(url) {
-          return `<a href="${url}" target="_blank" class="location-link" onclick="event.stopPropagation();">📍 點擊開啟地圖連結</a>`;
-        });
+    // --- 6. SAFE LOCATION & IMAGE RENDERING ---
+    function getSafeHttpUrl(value) {
+      if (!value) return null;
+      try {
+        const url = new URL(String(value), window.location.href);
+        return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+      } catch (e) {
+        return null;
       }
-      
-      return escapeHtml(locationStr);
+    }
+
+    function renderSafeLocation(container, locationValue) {
+      const locationText = String(locationValue || "線上 / 待定");
+      const match = locationText.match(/https?:\/\/[^\s]+/i);
+      container.replaceChildren();
+
+      if (!match) {
+        container.textContent = locationText;
+        return;
+      }
+
+      const safeUrl = getSafeHttpUrl(match[0]);
+      if (!safeUrl) {
+        container.textContent = locationText;
+        return;
+      }
+
+      const beforeText = locationText.slice(0, match.index);
+      const afterText = locationText.slice(match.index + match[0].length);
+      if (beforeText) container.append(document.createTextNode(beforeText + " "));
+
+      const link = document.createElement("a");
+      link.href = safeUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.className = "location-link";
+      link.textContent = "📍 點擊開啟地圖連結";
+      container.append(link);
+
+      if (afterText) container.append(document.createTextNode(" " + afterText));
+    }
+
+    function getSafeImageUrl(pictureUrl, displayName) {
+      return getSafeHttpUrl(pictureUrl) ||
+        `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(String(displayName || "Member"))}`;
     }
 
     // --- 7. RENDER EVENTS & CARDS ---
-    function renderNoticeBoard() {
-      document.getElementById("notice-text-content").innerText = noticeData.currentContent || "目前尚無公告。";
-      document.getElementById("notice-author-info").innerText = `由 ${noticeData.lastAuthor || '管理員'} 發布`;
-      document.getElementById("notice-time-info").innerText = noticeData.lastTime || "--";
-    }
-
     function renderEvents() {
       const listEl = document.getElementById("event-list");
       listEl.innerHTML = "";
@@ -1527,15 +1515,14 @@
         if (isEnded) {
           rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
         } else if (isAttending) {
-          rsvpBtnHtml = `<button class="line-btn btn-cancel" onclick="toggleRSVP('${evt.id}')">取消參加</button>`;
+          rsvpBtnHtml = `<button class="line-btn btn-cancel rsvp-action">取消參加</button>`;
         } else if (isFull) {
           rsvpBtnHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>揪團已滿</button>`;
         } else {
-          rsvpBtnHtml = `<button class="line-btn btn-join" onclick="toggleRSVP('${evt.id}')">參加活動</button>`;
+          rsvpBtnHtml = `<button class="line-btn btn-join rsvp-action">參加活動</button>`;
         }
 
         const gcalUrl = generateGoogleCalendarUrl(evt);
-        const locationHtml = formatLocationHtml(evt.location);
 
         cardEl.innerHTML = `
           <div class="card-header">
@@ -1545,7 +1532,7 @@
           
           <div class="card-info">
             <div class="info-row"><span class="info-label">⏰ 時間：</span><span>${formattedTime}</span></div>
-            <div class="info-row"><span class="info-label">📍 地點：</span><span>${locationHtml}</span></div>
+            <div class="info-row"><span class="info-label">📍 地點：</span><span class="event-location"></span></div>
             <div class="info-row"><span class="info-label">💰 費用：</span><span>${escapeHtml(evt.fee || "免費")}</span></div>
             <div class="info-row"><span class="info-label">👑 主揪：</span><span>${escapeHtml(evt.hostName || evt.hostUser?.displayName || "無")}</span></div>
             <div class="info-row">
@@ -1556,49 +1543,21 @@
 
           <div class="card-actions">
             ${rsvpBtnHtml}
-            <button class="line-btn btn-detail" onclick="openDetailModal('${evt.id}')">詳情</button>
-            <a class="line-btn btn-calendar" href="${gcalUrl}" target="_blank">加到行事曆</a>
+            <button class="line-btn btn-detail detail-action">詳情</button>
+            <a class="line-btn btn-calendar" href="${gcalUrl}" target="_blank" rel="noopener noreferrer">加到行事曆</a>
           </div>
         `;
+
+        renderSafeLocation(cardEl.querySelector(".event-location"), evt.location);
+        const rsvpButton = cardEl.querySelector(".rsvp-action");
+        if (rsvpButton) rsvpButton.onclick = () => toggleRSVP(evt.id);
+        cardEl.querySelector(".detail-action").onclick = () => openDetailModal(evt.id);
 
         listEl.appendChild(cardEl);
       });
     }
 
-    // --- 8. NOTICE BOARD HANDLERS ---
-    document.getElementById("form-edit-notice").addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (!ensureLoggedIn()) return;
-
-      const text = document.getElementById("input-notice-text").value.trim();
-      if (!text) return;
-
-      const nowStr = getFormattedNow();
-      noticeData.currentContent = text;
-      noticeData.lastAuthor = currentUser.displayName;
-      noticeData.lastTime = nowStr;
-
-      noticeData.history = noticeData.history || [];
-      noticeData.history.unshift({
-        author: currentUser.displayName,
-        time: nowStr,
-        content: text
-      });
-
-      saveLocalNotice();
-      sendPostToGAS({ action: "updateNotice", content: text, author: currentUser.displayName });
-      
-      renderNoticeBoard();
-      closeModal("modal-edit-notice");
-
-      const noticeShareText = `📌【群組最新重要公告】\n${text}\n由 ${currentUser.displayName} 發布於 ${nowStr}`;
-      safeCopyText(noticeShareText);
-
-      document.getElementById("alert-copied-text").innerText = noticeShareText;
-      openModal("modal-copy-alert");
-    });
-
-    // --- 9. BROADCAST ALL OPEN EVENTS ---
+    // --- 8. BROADCAST ALL OPEN EVENTS ---
     function broadcastOpenEvents() {
       const openEvents = eventsData
         .filter(evt => {
@@ -1834,6 +1793,11 @@ ${pageUrl}`;
       if (!activeEventId) return;
       const evt = eventsData.find(e => e.id === activeEventId);
       if (!evt) return;
+      if (!isCurrentUserHost(evt)) {
+        alert("🔒 只有活動建立者可以編輯內容！");
+        closeModal("modal-edit");
+        return;
+      }
 
       const newTitle = document.getElementById("edit-title").value.trim();
       const newDatetime = document.getElementById("edit-datetime").value;
@@ -1891,13 +1855,20 @@ ${pageUrl}`;
 
       const formattedTime = formatDateTimeNoMinutes(evt.datetime);
       const maxCap = getMaxAttendees(evt);
+      const isHost = isCurrentUserHost(evt);
 
       document.getElementById("detail-title").innerText = evt.title;
       document.getElementById("detail-time").innerText = formattedTime;
-      document.getElementById("detail-location").innerHTML = formatLocationHtml(evt.location);
+      renderSafeLocation(document.getElementById("detail-location"), evt.location);
       document.getElementById("detail-fee").innerText = evt.fee || "免費";
       
-      document.getElementById("detail-host-input").value = evt.hostName || evt.hostUser?.displayName || "";
+      const hostInput = document.getElementById("detail-host-input");
+      const saveHostBtn = document.getElementById("btn-save-host");
+      const editBtn = document.getElementById("btn-trigger-edit");
+      hostInput.value = evt.hostName || evt.hostUser?.displayName || "";
+      hostInput.readOnly = !isHost;
+      saveHostBtn.style.display = isHost ? "flex" : "none";
+      editBtn.style.display = isHost ? "flex" : "none";
       document.getElementById("detail-desc").innerText = evt.description || "尚無補充說明。";
       document.getElementById("detail-capacity-text").innerText = 
         `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''}`;
@@ -1906,12 +1877,22 @@ ${pageUrl}`;
       if (evt.attendees.length === 0) {
         attendeesEl.innerHTML = `<span style="color:#64748b;">目前尚無成員報名</span>`;
       } else {
-        attendeesEl.innerHTML = evt.attendees.map(u => `
-          <div class="attendee-pill" style="padding:4px 10px 4px 6px;">
-            <img src="${u.pictureUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + u.displayName}" alt="Avatar">
-            <span>${escapeHtml(u.displayName)}</span>
-          </div>
-        `).join("");
+        attendeesEl.replaceChildren();
+        evt.attendees.forEach(u => {
+          const displayName = String(u.displayName || "未命名成員");
+          const pill = document.createElement("div");
+          pill.className = "attendee-pill";
+          pill.style.padding = "4px 10px 4px 6px";
+
+          const image = document.createElement("img");
+          image.src = getSafeImageUrl(u.pictureUrl, displayName);
+          image.alt = `${displayName}的頭像`;
+
+          const name = document.createElement("span");
+          name.textContent = displayName;
+          pill.append(image, name);
+          attendeesEl.append(pill);
+        });
       }
 
       const historyEl = document.getElementById("detail-history-list");
@@ -1920,13 +1901,17 @@ ${pageUrl}`;
       } else {
         historyEl.innerHTML = evt.history.map(log => `
           <div class="history-item">
-            <span class="history-meta">👤 ${escapeHtml(log.author)} (${log.time})</span>：${escapeHtml(log.action)}
+            <span class="history-meta">👤 ${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>：${escapeHtml(log.action)}
           </div>
         `).join("");
       }
 
-      document.getElementById("btn-trigger-edit").onclick = () => {
+      editBtn.onclick = () => {
         if (!ensureLoggedIn()) return;
+        if (!isCurrentUserHost(evt)) {
+          alert("🔒 只有活動建立者可以編輯內容！");
+          return;
+        }
         closeModal("modal-detail");
         
         document.getElementById("edit-title").value = evt.title;
@@ -1959,9 +1944,13 @@ ${pageUrl}`;
         openModal("modal-copy-alert");
       };
 
-      document.getElementById("btn-save-host").onclick = () => {
+      saveHostBtn.onclick = () => {
         if (!ensureLoggedIn()) return;
-        const newHostName = document.getElementById("detail-host-input").value.trim();
+        if (!isCurrentUserHost(evt)) {
+          alert("🔒 只有活動建立者可以修改主揪名稱！");
+          return;
+        }
+        const newHostName = hostInput.value.trim();
         if (newHostName && newHostName !== evt.hostName) {
           evt.hostName = newHostName;
           evt.history = evt.history || [];
@@ -1979,17 +1968,15 @@ ${pageUrl}`;
         }
       };
 
-      // 👑 檢查刪除權限：僅限主揪本人或創立者
-      const isHost = currentUser && (
-        (evt.hostUser && evt.hostUser.userId === currentUser.userId) ||
-        (evt.hostName && evt.hostName === currentUser.displayName)
-      );
-
       const deleteBtn = document.getElementById("btn-delete-event");
       if (isHost) {
         deleteBtn.style.display = "block";
         deleteBtn.onclick = () => {
           if (!ensureLoggedIn()) return;
+          if (!isCurrentUserHost(evt)) {
+            alert("🔒 只有活動建立者可以刪除活動！");
+            return;
+          }
           if (confirm(`⚠️ 確定要刪除活動「${evt.title}」嗎？此操作不可複原。`)) {
             eventsData = eventsData.filter(e => e.id !== eventId);
             saveLocalEvents();
@@ -2007,28 +1994,47 @@ ${pageUrl}`;
     }
 
     function openModal(id) {
-      document.getElementById(id).classList.add("active");
+      const modal = document.getElementById(id);
+      modal.classList.add("active");
+      modal.setAttribute("aria-hidden", "false");
+      const firstControl = modal.querySelector("button, input, textarea, a[href]");
+      if (firstControl) setTimeout(() => firstControl.focus(), 0);
     }
 
     function closeModal(id) {
-      document.getElementById(id).classList.remove("active");
+      const modal = document.getElementById(id);
+      modal.classList.remove("active");
+      modal.setAttribute("aria-hidden", "true");
     }
 
     // --- 17. DEV PROFILES ---
     function renderDevProfiles() {
       const container = document.getElementById("dev-profiles-container");
-      container.innerHTML = DEV_PROFILES.map(prof => `
-        <div class="dev-card ${currentUser && prof.userId === currentUser.userId ? 'active' : ''}" onclick="switchDevProfile('${prof.userId}')">
-          <img src="${prof.pictureUrl}" width="20" height="20" style="border-radius:50%; vertical-align:middle; margin-right:4px;">
-          ${escapeHtml(prof.displayName)}
-        </div>
-      `).join("");
+      container.replaceChildren();
+      DEV_PROFILES.forEach(prof => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `dev-card ${currentUser && prof.userId === currentUser.userId ? "active" : ""}`;
+        button.onclick = () => switchDevProfile(prof.userId);
+
+        const image = document.createElement("img");
+        image.src = getSafeImageUrl(prof.pictureUrl, prof.displayName);
+        image.alt = `${prof.displayName}的測試頭像`;
+        image.width = 20;
+        image.height = 20;
+        image.style.cssText = "border-radius:50%; vertical-align:middle; margin-right:4px;";
+
+        button.append(image, document.createTextNode(prof.displayName));
+        container.append(button);
+      });
     }
 
     function switchDevProfile(userId) {
+      if (!isDevMode) return;
       const target = DEV_PROFILES.find(p => p.userId === userId);
       if (target) {
         currentUser = target;
+        isAuthVerified = true;
         localStorage.setItem(CONFIG.USER_CACHE_KEY, JSON.stringify(currentUser));
         updateUserUI();
         renderDevProfiles();
@@ -2049,27 +2055,6 @@ ${pageUrl}`;
 
       document.getElementById("btn-broadcast-all").onclick = () => {
         broadcastOpenEvents();
-      };
-
-      document.getElementById("btn-edit-notice").onclick = () => {
-        if (!ensureLoggedIn()) return;
-        document.getElementById("input-notice-text").value = noticeData.currentContent || "";
-        openModal("modal-edit-notice");
-      };
-
-      document.getElementById("btn-notice-history").onclick = () => {
-        const historyContainer = document.getElementById("notice-history-container");
-        if (!noticeData.history || noticeData.history.length === 0) {
-          historyContainer.innerHTML = `<div style="color:#94a3b8; font-size:12px;">尚無公告留言紀錄</div>`;
-        } else {
-          historyContainer.innerHTML = noticeData.history.map(item => `
-            <div class="history-item">
-              <div class="history-meta">👤 ${escapeHtml(item.author)} (${item.time})</div>
-              <div style="margin-top:2px;">${escapeHtml(item.content)}</div>
-            </div>
-          `).join("");
-        }
-        openModal("modal-notice-history");
       };
 
       document.getElementById("btn-dev-toggle").onclick = () => {
@@ -2095,8 +2080,8 @@ ${pageUrl}`;
     }
 
     function escapeHtml(str) {
-      if (!str) return "";
-      return str.replace(/[&<>"']/g, function(m) {
+      if (str === undefined || str === null) return "";
+      return String(str).replace(/[&<>"']/g, function(m) {
         return {
           '&': '&amp;',
           '<': '&lt;',
