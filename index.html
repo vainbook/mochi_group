@@ -147,23 +147,23 @@
       color: #ffffff;
     }
 
-    /* Central Sync Clock Prompt Notice */
+    /* Central Sync Clock Prompt Notice (精簡微型系統狀態列) */
     .sync-clock-prompt {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(8px);
       border: 1px solid #cbd5e1;
-      border-radius: 12px;
-      padding: 10px 14px;
-      margin-bottom: 14px;
-      font-size: 13px;
+      border-radius: 8px;
+      padding: 4px 10px;
+      margin-bottom: 8px;
+      font-size: 11px;
       font-weight: 700;
       color: #475569;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-      transition: all 0.4s ease;
+      gap: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+      transition: all 0.3s ease;
     }
 
     .sync-clock-prompt.hidden {
@@ -173,6 +173,36 @@
       margin-bottom: 0;
       border: none;
       overflow: hidden;
+    }
+
+    /* Floating Toast Notification (自動消失吐司提示) */
+    .toast-notification {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(10px);
+      color: #ffffff;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 13.5px;
+      font-weight: 700;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      z-index: 2500;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toast-notification.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
     }
 
     .clock-spinner {
@@ -1097,6 +1127,11 @@
     </div>
   </div>
 
+  <!-- Floating Toast Notification (自動消失吐司提示) -->
+  <div id="toast-notification" class="toast-notification" role="status" aria-live="polite">
+    <span id="toast-text">📋 已複製活動資訊，請分享到群組！</span>
+  </div>
+
   <!-- Minimal Modal: Auto-Copy Simplified Notification -->
   <div id="modal-copy-alert" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-copy-alert">
     <div class="modal-box" style="text-align:center; height:auto; max-height:90vh; max-width:380px; padding:24px 20px; border-radius:20px;">
@@ -1168,7 +1203,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0128",
+      APP_VERSION: "v260806.0129",
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1427,6 +1462,21 @@
         badgeEl.style.background = "#f1f5f9";
         badgeEl.style.color = "#64748b";
       }
+    }
+
+    let toastTimer = null;
+    function showToast(message = "📋 已複製活動資訊，請分享到群組！") {
+      const toastEl = document.getElementById("toast-notification");
+      const textEl = document.getElementById("toast-text");
+      if (!toastEl || !textEl) return;
+
+      textEl.innerText = message;
+      toastEl.classList.add("show");
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastEl.classList.remove("show");
+      }, 1000);
     }
 
     function setSyncClockPrompt(status, messageText) {
@@ -2448,9 +2498,7 @@ ${eventBlocks}
 ${pageUrl}`;
 
       safeCopyText(broadcastText);
-
-      document.getElementById("alert-copied-text").innerText = broadcastText;
-      openModal("modal-copy-alert");
+      showToast("📋 已複製宣傳資訊，請分享到群組！");
     }
 
     // --- 10. EXPORT ENDED EVENTS FUNCTION ---
@@ -2475,8 +2523,7 @@ ${pageUrl}`;
       const exportText = `【已過期活動歷史紀錄】\n` + exportLines.join("\n");
 
       safeCopyText(exportText);
-      document.getElementById("alert-copied-text").innerText = exportText;
-      openModal("modal-copy-alert");
+      showToast("📋 已複製過期紀錄，請分享到群組！");
     }
 
     // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
@@ -2606,8 +2653,7 @@ ${pageUrl}`;
         ? `取消${participationText}${evt.title}活動`
         : `${participationText}${evt.title}活動`;
       safeCopyText(copiedText);
-      document.getElementById("alert-copied-text").innerText = copiedText;
-      openModal("modal-copy-alert");
+      showToast("📋 已複製活動資訊，請分享到群組！");
     }
 
     // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
@@ -2619,8 +2665,7 @@ ${pageUrl}`;
       if (actionType === "cancel") {
         const cancelText = `取消參加${evt.title}活動`;
         safeCopyText(cancelText);
-        document.getElementById("alert-copied-text").innerText = cancelText;
-        openModal("modal-copy-alert");
+        showToast("📋 已複製活動資訊，請分享到群組！");
         return;
       }
 
@@ -2644,9 +2689,7 @@ ${pageUrl}`;
 ${pageUrl}`;
 
       safeCopyText(textToCopy);
-
-      document.getElementById("alert-copied-text").innerText = textToCopy;
-      openModal("modal-copy-alert");
+      showToast("📋 已複製活動資訊，請分享到群組！");
     }
 
     // --- 13. EVENT CREATION ---
@@ -2955,8 +2998,7 @@ ${memberDetails}
 各位記得準時出席活動唷！`;
 
         safeCopyText(mentionNoticeText);
-        document.getElementById("alert-copied-text").innerText = mentionNoticeText;
-        openModal("modal-copy-alert");
+        showToast("📋 已複製成員標記，請分享到群組！");
       };
 
       const deleteBtn = document.getElementById("btn-delete-event");
