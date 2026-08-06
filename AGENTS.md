@@ -29,12 +29,14 @@
 
 ## 版本與發布規則
 
+- 每次更新任何 LINE 功能都必須建立新版本，不論改動是前端、GAS、按鈕、文字、權限、同步、地圖、表格欄位或錯誤修正，都不得沿用上一版版本號。
+- 新版本必須使用這次修改完成時的當下台北時間戳，不得使用開始工作時間、上次版本時間或人工猜測時間。產生版本前應先讀取系統當下時間。
 - 版本格式為台北時間 `vYYMMDD.HHMM`，例如 `v260806.0128`。
 - 每次前端行為或 GAS 連線變更都要同步更新：
   - `index.html` 頁首 `.version-label` 文字與 `datetime`。
   - `index.html` 的 `CONFIG.APP_VERSION`。
   - `version.json` 的 `version` 與 `releasedAt`。
-- 三處版本必須完全一致。
+- 三處版本必須完全一致，且新版本必須顯示在網頁標題旁，讓 LINE 使用者可直接確認當前頁面版本。
 - 除非使用者明確要求，不得自行 push GitHub 或部署 GAS。即使允許 push GitHub，GAS 仍需要使用者於 Apps Script 完成授權與部署。
 - 推送後要直接讀取 GitHub Pages 的 `version.json`，確認它已發布新版，不只檢查 `git push` 成功。
 
