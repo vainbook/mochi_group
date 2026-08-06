@@ -874,7 +874,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time class="version-label" datetime="2026-08-06T01:28:59+08:00">v260806.0128</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-06T09:22:20+08:00">v260806.0922</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1203,7 +1203,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0919", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260806.0922", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1507,9 +1507,17 @@
       }
     }
 
+    function updateVersionBadgeUI() {
+      const badgeEl = document.getElementById("app-version-badge");
+      if (badgeEl) {
+        badgeEl.innerText = CONFIG.APP_VERSION;
+      }
+    }
+
     // --- 2. INITIALIZATION ---
     document.addEventListener("DOMContentLoaded", () => {
       isDevMode = checkDevModeVisibility();
+      updateVersionBadgeUI();
       
       loadLocalData();
       renderEvents(); // 立刻渲染本地畫面
