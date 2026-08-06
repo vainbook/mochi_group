@@ -175,33 +175,39 @@
       overflow: hidden;
     }
 
-    /* Floating Toast Notification (自動消失吐司提示) */
+    /* Floating Toast Notification (正中央放大雙行吐司提示) */
     .toast-notification {
       position: fixed;
-      top: 20px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%) translateY(-20px);
-      background: rgba(15, 23, 42, 0.92);
-      backdrop-filter: blur(10px);
+      transform: translate(-50%, -50%) scale(0.85);
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(16px);
       color: #ffffff;
-      padding: 10px 20px;
-      border-radius: 30px;
-      font-size: 13.5px;
+      padding: 22px 24px;
+      border-radius: 20px;
+      font-size: 16px;
       font-weight: 700;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
       z-index: 2500;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-      white-space: nowrap;
+      white-space: pre-line;
+      text-align: center;
+      line-height: 1.6;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 6px;
+      width: 82%;
+      max-width: 320px;
     }
 
     .toast-notification.show {
       opacity: 1;
-      transform: translateX(-50%) translateY(0);
+      transform: translate(-50%, -50%) scale(1);
       pointer-events: auto;
     }
 
@@ -1129,7 +1135,8 @@
 
   <!-- Floating Toast Notification (自動消失吐司提示) -->
   <div id="toast-notification" class="toast-notification" role="status" aria-live="polite">
-    <span id="toast-text">📋 已複製活動資訊，請分享到群組！</span>
+    <span id="toast-text">活動資訊已自動複製
+請到群組中貼上分享</span>
   </div>
 
   <!-- Minimal Modal: Auto-Copy Simplified Notification -->
@@ -1203,7 +1210,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0922", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260806.0926", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1465,7 +1472,7 @@
     }
 
     let toastTimer = null;
-    function showToast(message = "📋 已複製活動資訊，請分享到群組！") {
+    function showToast(message = "活動資訊已自動複製\n請到群組中貼上分享") {
       const toastEl = document.getElementById("toast-notification");
       const textEl = document.getElementById("toast-text");
       if (!toastEl || !textEl) return;
@@ -1476,7 +1483,7 @@
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
         toastEl.classList.remove("show");
-      }, 2000); // 延長顯示 2 秒鐘
+      }, 2000); // 顯示 2 秒鐘
     }
 
     function setSyncClockPrompt(status, messageText) {
@@ -2661,7 +2668,7 @@ ${pageUrl}`;
         ? `取消${participationText}${evt.title}活動`
         : `${participationText}${evt.title}活動`;
       safeCopyText(copiedText);
-      showToast("📋 已複製活動資訊，請分享到群組！");
+      showToast("活動資訊已自動複製\n請到群組中貼上分享");
     }
 
     // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
@@ -2673,7 +2680,7 @@ ${pageUrl}`;
       if (actionType === "cancel") {
         const cancelText = `取消參加${evt.title}活動`;
         safeCopyText(cancelText);
-        showToast("📋 已複製活動資訊，請分享到群組！");
+        showToast("活動資訊已自動複製\n請到群組中貼上分享");
         return;
       }
 
@@ -2697,7 +2704,7 @@ ${pageUrl}`;
 ${pageUrl}`;
 
       safeCopyText(textToCopy);
-      showToast("📋 已複製活動資訊，請分享到群組！");
+      showToast("活動資訊已自動複製\n請到群組中貼上分享");
     }
 
     // --- 13. EVENT CREATION ---
