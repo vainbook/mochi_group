@@ -91,6 +91,18 @@
       font-weight: 700;
       line-height: 1.2;
       white-space: nowrap;
+      /* 隱藏的管理員入口：點擊版本號開啟管理員模式。
+         刻意維持原本外觀，只加大可點區域方便手機操作。 */
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      margin: -6px -4px;
+      padding: 8px 9px;
+    }
+
+    .version-label.admin-active {
+      color: #ffffff;
+      background: var(--line-green);
     }
 
     .sync-status-badge {
@@ -681,6 +693,71 @@
       background: #e6a600;
     }
 
+    .fab-calendar {
+      background: #ffffff;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+    }
+
+    .fab-calendar:hover {
+      background: #f1f5f9;
+    }
+
+    /* 活動日曆檢視 */
+    .calendar-hint {
+      font-size: 12px;
+      color: #64748b;
+      margin: 0 0 10px;
+      line-height: 1.6;
+    }
+
+    .calendar-embed-wrap {
+      width: 100%;
+      height: 58vh;
+      min-height: 320px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #f8fafc;
+    }
+
+    .calendar-embed-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    .calendar-unavailable {
+      padding: 24px 12px;
+      text-align: center;
+      font-size: 13px;
+      color: #64748b;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+    }
+
+    .calendar-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .calendar-actions .line-btn {
+      flex: 1;
+      text-align: center;
+      text-decoration: none;
+      padding: 10px;
+    }
+
+    .calendar-note {
+      font-size: 11px;
+      color: #94a3b8;
+      margin: 10px 0 0;
+      line-height: 1.7;
+    }
+
     /* Native Full Screen Sheet Modal */
     .modal-overlay {
       position: fixed;
@@ -994,7 +1071,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-06T09:22:20+08:00">v260806.0922</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-08T00:17:39+08:00">v260808.0017</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1005,7 +1082,6 @@
           <span id="current-name" class="user-name">載入中...</span>
         </div>
         <button id="btn-login-action" class="dev-btn" style="display:inline-block; border-color:var(--line-green); color:var(--line-green);">LINE 登入</button>
-        <button id="btn-admin-mode" class="dev-btn" type="button" style="display:inline-block;">管理員模式</button>
         <button id="btn-dev-toggle" class="dev-btn">測試切換身分</button>
       </div>
     </header>
@@ -1035,14 +1111,50 @@
 
   </div>
 
-  <!-- Floating Action Buttons Group (宣傳 & 揪團) -->
+  <!-- Floating Action Buttons Group (日曆 & 宣傳 & 揪團) -->
   <div class="fab-group">
+    <button id="btn-open-calendar" class="fab-btn fab-calendar" type="button">
+      <span>日曆</span>
+    </button>
     <button id="btn-broadcast-all" class="fab-btn fab-broadcast">
       <span>宣傳</span>
     </button>
     <button id="fab-add-event" class="fab-btn fab-add">
       <span>揪團</span>
     </button>
+  </div>
+
+  <!-- Modal: Calendar View (活動日曆) -->
+  <div id="modal-calendar" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-calendar">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="title-calendar" class="modal-title-text">活動日曆</span>
+        <button class="modal-close" data-close="modal-calendar" aria-label="關閉活動日曆視窗">關閉</button>
+      </div>
+      <div class="modal-body">
+        <p id="calendar-hint" class="calendar-hint">
+          這裡顯示所有未過期的一般活動。固定團沒有固定日期，不會出現在日曆上。
+        </p>
+        <div id="calendar-embed-wrap" class="calendar-embed-wrap">
+          <iframe id="calendar-embed" title="活動日曆" loading="lazy"></iframe>
+        </div>
+        <div id="calendar-unavailable" class="calendar-unavailable" style="display:none;">
+          尚未設定日曆，或雲端仍在同步中。請稍後再試。
+        </div>
+        <div class="calendar-actions">
+          <a id="btn-subscribe-calendar" class="line-btn btn-join" target="_blank" rel="noopener noreferrer">
+            訂閱到我的 Google 日曆
+          </a>
+          <a id="btn-open-calendar-web" class="line-btn btn-calendar" target="_blank" rel="noopener noreferrer">
+            在瀏覽器開啟
+          </a>
+        </div>
+        <p class="calendar-note">
+          訂閱後，之後新增或修改的活動都會自動出現在你的 Google 日曆。
+          若按了訂閱卻看不到內容，代表這本日曆尚未開放給你，請找管理員設定共用權限。
+        </p>
+      </div>
+    </div>
   </div>
 
   <!-- Modal: Create Event (發起揪團) -->
@@ -1324,12 +1436,13 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260807.1207", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260808.0017", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
       VERSION_MANIFEST_URL: "version.json",
       DATA_SYNC_INTERVAL_MS: 12000,
+      WRITE_TIMEOUT_MS: 20000,
       VERSION_CHECK_INTERVAL_MS: 60000,
       STORAGE_KEY: "line_events_v6",
       USER_CACHE_KEY: "line_user_profile_v2"
@@ -1358,6 +1471,8 @@
     let pendingMutationCount = 0;
     let localMutationRevision = 0;
     let serverSchemaVersion = "0";
+    // 日曆 ID 由 GAS 提供，不寫進前端程式碼與 GitHub。
+    let serverCalendarInfo = null;
     let automaticUpdatesStarted = false;
     let automaticUpdateDebounceTimer = null;
     const processingRSVPEventIds = new Set();
@@ -1968,18 +2083,17 @@
     }
 
     function updateUserUI() {
-      const adminButton = document.getElementById("btn-admin-mode");
+      // 管理員入口隱藏在版本號上，不再顯示成一般按鈕。
+      const versionBadge = document.getElementById("app-version-badge");
       if (currentUser) {
         document.getElementById("current-name").innerText = currentUser.displayName +
           (currentUserCanDeleteAnyEvent ? "（管理員）" : "");
-        adminButton.disabled = false;
-        adminButton.innerText = currentUserCanDeleteAnyEvent ? "退出管理員" : "管理員模式";
-        adminButton.style.borderColor = currentUserCanDeleteAnyEvent ? "var(--line-green)" : "";
-        adminButton.style.color = currentUserCanDeleteAnyEvent ? "var(--line-green-dark)" : "";
       } else {
         document.getElementById("current-name").innerText = "未登入成員";
-        adminButton.disabled = true;
-        adminButton.innerText = "管理員模式";
+      }
+      if (versionBadge) {
+        versionBadge.classList.toggle("admin-active", currentUserCanDeleteAnyEvent);
+        versionBadge.title = currentUserCanDeleteAnyEvent ? "點擊退出管理員模式" : "";
       }
     }
 
@@ -2129,6 +2243,7 @@
         
         if (data && data.status === "success" && data.events && Array.isArray(data.events)) {
           serverSchemaVersion = String(data.schemaVersion || "1");
+          serverCalendarInfo = (data.calendar && data.calendar.configured) ? data.calendar : null;
           updateFixedGroupAvailability();
           const uniqueEventMap = new Map();
           data.events.forEach(remoteEvt => {
@@ -2196,16 +2311,49 @@
       return false;
     }
 
+    // 樂觀更新的還原機制：GAS 寫入失敗時必須把畫面改回去，
+    // 不可讓使用者以為雲端已完成，之後又被背景同步默默蓋回舊資料。
+    function snapshotEventState(evt) {
+      return evt ? JSON.parse(JSON.stringify(evt)) : null;
+    }
+
+    function isDetailModalOpen() {
+      const modal = document.getElementById("modal-detail");
+      return Boolean(modal) && modal.getAttribute("aria-hidden") === "false";
+    }
+
+    function rollbackEventState(snapshot, failureMessage) {
+      if (snapshot) {
+        const index = eventsData.findIndex(item => item.id === snapshot.id);
+        if (index >= 0) eventsData[index] = snapshot;
+        else eventsData.push(snapshot);
+        saveLocalEvents();
+        renderEvents();
+        if (isDetailModalOpen()) openDetailModal(snapshot.id);
+      }
+      alert(failureMessage);
+    }
+
+    function describePostFailure(error) {
+      if (error && error.name === "AbortError") return "雲端回應逾時，變更沒有存檔。請稍後再試一次。";
+      const message = String((error && error.message) || "").trim();
+      return message || "無法連線雲端，變更沒有存檔。";
+    }
+
     async function sendPostToGAS(payload) {
       localMutationRevision += 1;
       // 本機測試模式只驗證操作反應，不寫入正式資料。
-      if (isDevMode) return true;
-      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) return false;
+      if (isDevMode) return { ok: true, message: "" };
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) {
+        return { ok: false, message: "尚未設定雲端連線網址。" };
+      }
 
       pendingMutationCount += 1;
       updateSyncBadge("同步變更中...", false);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      // 儲存活動時 GAS 需同步 Google 日曆，逾時要留足夠餘裕，
+      // 否則前端會誤判失敗而回滾一筆其實已經寫入的變更。
+      const timeoutId = setTimeout(() => controller.abort(), CONFIG.WRITE_TIMEOUT_MS);
 
       try {
         const requestPayload = {
@@ -2246,11 +2394,11 @@
         }
         updateSyncBadge("變更已送出", true);
         setTimeout(() => runBackgroundSync(), 1200);
-        return true;
+        return { ok: true, message: "" };
       } catch (err) {
         console.warn("GAS POST fallback:", err);
         updateSyncBadge("變更尚未同步", false);
-        return false;
+        return { ok: false, message: describePostFailure(err) };
       } finally {
         pendingMutationCount = Math.max(0, pendingMutationCount - 1);
         clearTimeout(timeoutId);
@@ -2340,6 +2488,7 @@
       }
 
       if (confirm(`確定要將成員「${targetUserName}」從活動「${evt.title}」的名單中移除嗎？`)) {
+        const snapshot = snapshotEventState(evt);
         evt.attendees = (evt.attendees || []).filter(u => String(u.userId) !== String(targetUserId));
         
         if (isFixedGroup(evt)) {
@@ -2351,9 +2500,7 @@
         addHistoryLog(evt, `管理員移除成員 ${targetUserName}`, "leave");
         saveLocalEvents();
         renderEvents();
-        if (document.getElementById("modal-detail").getAttribute("aria-hidden") === "false") {
-          openEventDetailModal(eventId);
-        }
+        if (isDetailModalOpen()) openDetailModal(eventId);
         showToast(`已將 ${targetUserName} 從活動名冊中移除`);
 
         sendPostToGAS({
@@ -2365,6 +2512,10 @@
           adminPassword: currentAdminPassword,
           history: evt.history,
           historyEntry: evt.history[0]
+        }).then(result => {
+          if (!result.ok) {
+            rollbackEventState(snapshot, `移除成員失敗，已還原名單。\n\n${result.message}`);
+          }
         });
       }
     }
@@ -2782,6 +2933,7 @@ ${pageUrl}`;
       const existingIdx = evt.attendees.findIndex(u => u.userId === currentUser.userId);
 
       let actionType = "";
+      const snapshot = snapshotEventState(evt);
 
       if (existingIdx >= 0) {
         if (isCurrentUserHost(evt)) {
@@ -2824,6 +2976,13 @@ ${pageUrl}`;
         pictureUrl: currentUser.pictureUrl,
         history: evt.history,
         historyEntry: evt.history[0]
+      }).then(result => {
+        if (!result.ok) {
+          rollbackEventState(
+            snapshot,
+            `${actionType === "join" ? "報名" : "退出"}失敗，已還原名單。\n\n${result.message}`
+          );
+        }
       });
     }
 
@@ -2838,6 +2997,7 @@ ${pageUrl}`;
         return;
       }
 
+      const snapshot = snapshotEventState(evt);
       normalizeFixedGroupParticipation(evt);
       const targetList = participationType === "fixed" ? evt.fixedAttendees : evt.weeklyAttendees;
       const isCurrentlySelected = targetList.some(user => String(user.userId) === String(currentUser.userId));
@@ -2886,6 +3046,10 @@ ${pageUrl}`;
         displayName: currentUser.displayName,
         pictureUrl: currentUser.pictureUrl,
         historyEntry: evt.history[0]
+      }).then(result => {
+        if (!result.ok) {
+          rollbackEventState(snapshot, `更新固定團參與失敗，已還原名單。\n\n${result.message}`);
+        }
       });
     }
 
@@ -2976,7 +3140,16 @@ ${pageUrl}`;
 
       eventsData.push(newEvent);
       saveLocalEvents();
-      sendPostToGAS({ action: "saveEvent", eventAction: "create", ...newEvent });
+      sendPostToGAS({ action: "saveEvent", eventAction: "create", ...newEvent })
+        .then(result => {
+          if (result.ok) return;
+          // 建立失敗要把活動整筆移除，不能留下雲端沒有的幽靈活動。
+          eventsData = eventsData.filter(item => item.id !== newEvent.id);
+          expandedEventIds.delete(newEvent.id);
+          saveLocalEvents();
+          renderEvents();
+          alert(`發起揪團失敗，活動沒有建立。\n\n${result.message}`);
+        });
 
       renderEvents();
       closeModal("modal-create");
@@ -2985,6 +3158,62 @@ ${pageUrl}`;
 
       triggerAutoCopyAndAlert(newEvent, "create");
     });
+
+    // --- 活動日曆檢視 ---
+    function buildCalendarEmbedUrl(calendarId) {
+      const params = new URLSearchParams({
+        src: calendarId,
+        ctz: "Asia/Taipei",
+        mode: "AGENDA",
+        showTitle: "0",
+        showPrint: "0",
+        showCalendars: "0",
+        showTz: "0"
+      });
+      return `https://calendar.google.com/calendar/embed?${params.toString()}`;
+    }
+
+    function buildCalendarSubscribeUrl(calendarId) {
+      return `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(calendarId)}`;
+    }
+
+    function openCalendarModal() {
+      const embedWrap = document.getElementById("calendar-embed-wrap");
+      const unavailable = document.getElementById("calendar-unavailable");
+      const actions = document.querySelector(".calendar-actions");
+      const calendarId = serverCalendarInfo && serverCalendarInfo.calendarId;
+
+      if (!calendarId) {
+        embedWrap.style.display = "none";
+        actions.style.display = "none";
+        unavailable.style.display = "block";
+      } else {
+        embedWrap.style.display = "block";
+        actions.style.display = "flex";
+        unavailable.style.display = "none";
+
+        const iframe = document.getElementById("calendar-embed");
+        const embedUrl = buildCalendarEmbedUrl(calendarId);
+        // 每次開啟才載入，避免背景持續佔用 LINE 內建瀏覽器資源。
+        if (iframe.getAttribute("src") !== embedUrl) iframe.setAttribute("src", embedUrl);
+
+        const subscribeUrl = buildCalendarSubscribeUrl(calendarId);
+        document.getElementById("btn-subscribe-calendar").href = subscribeUrl;
+        document.getElementById("btn-open-calendar-web").href = embedUrl;
+
+        const titleEl = document.getElementById("title-calendar");
+        const name = serverCalendarInfo && serverCalendarInfo.name;
+        titleEl.innerText = name ? `活動日曆 · ${name}` : "活動日曆";
+      }
+
+      openModal("modal-calendar");
+    }
+
+    function closeCalendarModal() {
+      // 關閉時卸載 iframe，避免留在背景持續連線。
+      const iframe = document.getElementById("calendar-embed");
+      if (iframe) iframe.removeAttribute("src");
+    }
 
     // --- 14. GOOGLE CALENDAR GENERATOR ---
     function generateGoogleCalendarUrl(evt) {
@@ -3082,6 +3311,7 @@ ${pageUrl}`;
         return;
       }
 
+      const snapshot = snapshotEventState(evt);
       evt.title = newTitle;
       evt.datetime = newDatetime;
       evt.fixedTimeText = newFixedTimeText;
@@ -3110,7 +3340,15 @@ ${pageUrl}`;
       }
 
       saveLocalEvents();
-      sendPostToGAS({ action: "saveEvent", eventAction: hostChanged ? "handoff" : "update", ...evt });
+      sendPostToGAS({ action: "saveEvent", eventAction: hostChanged ? "handoff" : "update", ...evt })
+        .then(result => {
+          if (!result.ok) {
+            rollbackEventState(
+              snapshot,
+              `${hostChanged ? "交棒主揪" : "更新活動"}失敗，已還原內容。\n\n${result.message}`
+            );
+          }
+        });
 
       renderEvents();
       closeModal("modal-edit");
@@ -3287,12 +3525,12 @@ ${memberDetails}
               eventAction: "delete"
             });
 
-            if (!wasSent) {
+            if (!wasSent.ok) {
               if (originalIndex >= 0) eventsData.splice(originalIndex, 0, evt);
               else eventsData.push(evt);
               saveLocalEvents();
               renderEvents();
-              alert("活動尚未從雲端刪除，已恢復顯示，請稍後再試。");
+              alert(`活動尚未從雲端刪除，已恢復顯示。\n\n${wasSent.message}`);
               return;
             }
 
@@ -3332,6 +3570,7 @@ ${memberDetails}
       const modal = document.getElementById(id);
       modal.classList.remove("active");
       modal.setAttribute("aria-hidden", "true");
+      if (id === "modal-calendar") closeCalendarModal();
     }
 
     // --- 17. DEV PROFILES ---
@@ -3385,6 +3624,8 @@ ${memberDetails}
         openModal("modal-create");
       };
 
+      document.getElementById("btn-open-calendar").onclick = openCalendarModal;
+
       document.getElementById("btn-broadcast-all").onclick = () => {
         broadcastOpenEvents();
       };
@@ -3393,7 +3634,19 @@ ${memberDetails}
         openModal("modal-dev-profile");
       };
 
-      document.getElementById("btn-admin-mode").onclick = toggleAdminMode;
+      // 管理員入口：點擊標題旁的版本號即可開啟／退出（仍需輸入密碼）。
+      const versionBadge = document.getElementById("app-version-badge");
+      if (versionBadge) {
+        versionBadge.setAttribute("role", "button");
+        versionBadge.setAttribute("tabindex", "0");
+        versionBadge.onclick = toggleAdminMode;
+        versionBadge.onkeydown = (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleAdminMode();
+          }
+        };
+      }
       document.getElementById("form-admin-mode").addEventListener("submit", submitAdminModePassword);
 
       document.getElementById("btn-export-ended").onclick = () => {

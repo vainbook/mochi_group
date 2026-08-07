@@ -1,12 +1,62 @@
 /**
  * LINE 群組活動布告欄 — Google Apps Script 後端
  *
- * 安裝方式：
+ * ===========================================================================
+ * 【換人接手時要改哪些東西】
+ * ===========================================================================
+ * 本程式碼「不含」任何帳號專屬設定，全部改在下列位置。
+ * 換人使用時不需要修改這個檔案的任何一行，照下表逐項設定即可。
+ *
+ * ── A. 屬於 GAS 這一側（都不寫進程式碼） ──────────────────────────────
+ *
+ * A1. Google 試算表
+ *     改法：用新的 Sheet 開「擴充功能 → Apps Script」，貼入本檔，
+ *           執行一次 setupProject()。
+ *     存放：Script Properties 的 SPREADSHEET_ID（setupProject 會自動寫入）。
+ *     注意：沿用舊 Sheet 的話，Script Properties 會留著舊的 SPREADSHEET_ID，
+ *           必須手動刪掉該筆屬性，否則仍會寫到舊試算表。
+ *
+ * A2. Google 日曆
+ *     改法：Sheet 選單「活動布告欄 → 設定 Google 日曆」，貼上日曆網址或 ID。
+ *     存放：Script Properties 的 GOOGLE_CALENDAR_ID。
+ *     注意：執行部署的 Google 帳號必須對該日曆有「變更活動」權限，
+ *           唯讀訂閱的日曆無法寫入。設定完可再跑「同步現有未過期活動」。
+ *
+ * A3. 管理員密碼
+ *     改法：Sheet 選單「活動布告欄 → 設定管理員密碼」。
+ *     存放：Script Properties 的 ADMIN_PASSWORD_SALT / ADMIN_PASSWORD_HASH
+ *           （只存加鹽 SHA-256 雜湊，明碼不落地）。
+ *
+ * A4. 專案時區
+ *     改法：Apps Script「專案設定 → 時區」設為 Asia/Taipei。
+ *     原因：前端送來的時間字串不帶時區，靠這個設定判讀。
+ *           設錯會讓所有 Google 日曆行程整批偏移。
+ *
+ * ── B. 屬於前端 index.html 這一側 ────────────────────────────────────
+ *
+ * B1. CONFIG.GAS_API_URL
+ *     本專案部署後產生的 /exec 網址。
+ *     優先「編輯現有部署 → 選新版本」以保持網址不變；
+ *     若改用「新增部署」而網址變了，前端這一行必須同步更新。
+ *
+ * B2. CONFIG.LIFF_ID 與 CONFIG.LIFF_URL
+ *     換 LINE 官方帳號／LINE Login channel 時要一起換這兩個值。
+ *     與 GAS 無關，純前端設定。
+ *
+ * ── C. 不需要改的東西 ────────────────────────────────────────────────
+ *     本檔所有常數（表格名稱、欄位、SCHEMA_VERSION、鎖定逾時）都是通用邏輯，
+ *     換人使用時維持原樣即可。
+ *
+ * ===========================================================================
+ * 【安裝步驟】
+ * ===========================================================================
  * 1. 從目標 Google Sheet 開啟「擴充功能 → Apps Script」。
  * 2. 將本檔完整貼入 Code.gs。
- * 3. 手動執行 setupProject() 一次並授權。
- * 4. 部署為網頁應用程式：執行身分選「我」，存取權選「所有人」。
- * 5. 將部署網址填入前端 CONFIG.GAS_API_URL。
+ * 3. 確認專案時區為 Asia/Taipei（見 A4）。
+ * 4. 手動執行 setupProject() 一次並授權。
+ * 5. 回到 Sheet，用「活動布告欄 → 設定 Google 日曆」保存目標日曆（見 A2）。
+ * 6. 部署為網頁應用程式：執行身分選「我」，存取權選「所有人」。
+ * 7. 將部署網址填入前端 CONFIG.GAS_API_URL（見 B1）。
  */
 
 const APP_CONFIG = Object.freeze({
@@ -16,9 +66,10 @@ const APP_CONFIG = Object.freeze({
   STATUS_DELETED: "deleted",
   ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
   ADMIN_PASSWORD_SALT_PROPERTY: "ADMIN_PASSWORD_SALT",
-  CALENDAR_ID: "13e4b1b0711e7392696c8f71839179b65ec5f9dbdf03f2dd2a665862c490ecfc@group.calendar.google.com",
+  CALENDAR_ID_PROPERTY: "GOOGLE_CALENDAR_ID",
+  CALENDAR_NAME_PROPERTY: "GOOGLE_CALENDAR_NAME",
   LOCK_TIMEOUT_MS: 15000,
-  SCHEMA_VERSION: "2"
+  SCHEMA_VERSION: "3"
 });
 
 const EVENT_HEADERS = Object.freeze([
@@ -71,9 +122,224 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("活動布告欄")
     .addItem("初始化／修復表格", "setupProject")
+    .addItem("設定 Google 日曆", "setGoogleCalendar")
+    .addItem("同步現有未過期活動", "syncAllExistingEventsToCalendar")
+    .addItem("日曆診斷", "checkCalendarStatus")
     .addItem("設定管理員密碼", "setAdminPassword")
     .addItem("顯示表格設計", "showSchemaInfo")
     .addToUi();
+}
+
+function setGoogleCalendar() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    "設定 Google 日曆",
+    "請貼上 Google 日曆網址或 Calendar ID。設定只保存在 Apps Script Properties，不會寫入 GitHub。",
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+
+  const calendarId = parseCalendarIdInput_(response.getResponseText());
+  if (!calendarId) {
+    ui.alert("無法辨識日曆網址或 Calendar ID。");
+    return;
+  }
+
+  const calendar = CalendarApp.getCalendarById(calendarId);
+  if (!calendar) {
+    ui.alert("無法開啟這本日曆。請確認目前 Google 帳號已加入該日曆並具有編輯權限。");
+    return;
+  }
+
+  // 唯讀訂閱的日曆一樣讀得到名稱，必須實際試寫一次才知道有沒有編輯權限。
+  // 少了這一步，設定當下會顯示成功，之後每次同步卻只在背景失敗，使用者不會察覺。
+  const writeCheckError = getCalendarWriteError_(calendar);
+  if (writeCheckError) {
+    ui.alert(
+      "這本日曆無法寫入，尚未保存設定。\n\n" +
+      "請確認執行部署的 Google 帳號對「" + calendar.getName() + "」具有「變更活動」權限。\n\n" +
+      "錯誤訊息：" + writeCheckError
+    );
+    return;
+  }
+
+  // 一併記下名稱，讓 doGet 不必每次都呼叫 CalendarApp 拖慢同步。
+  PropertiesService.getScriptProperties().setProperties({
+    [APP_CONFIG.CALENDAR_ID_PROPERTY]: calendarId,
+    [APP_CONFIG.CALENDAR_NAME_PROPERTY]: calendar.getName()
+  });
+  ui.alert("已連結 Google 日曆「" + calendar.getName() + "」，寫入權限測試通過。可再執行「同步現有未過期活動」。");
+}
+
+/**
+ * 建立一筆測試行程再立刻刪除，用來確認真的具有寫入權限。
+ * 回傳空字串代表可寫入，否則回傳錯誤訊息。
+ */
+function getCalendarWriteError_(calendar) {
+  let probeEvent = null;
+  try {
+    const probeStart = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
+    probeEvent = calendar.createEvent(
+      "【權限測試】活動布告欄，可直接忽略",
+      probeStart,
+      new Date(probeStart.getTime() + 15 * 60 * 1000)
+    );
+    if (!probeEvent) return "無法建立測試行程。";
+    return "";
+  } catch (error) {
+    return String(error && error.message ? error.message : error);
+  } finally {
+    if (probeEvent) {
+      try { probeEvent.deleteEvent(); } catch (ignore) {}
+    }
+  }
+}
+
+function parseCalendarIdInput_(inputValue) {
+  const input = String(inputValue || "").trim();
+  if (!input) return "";
+  if (/^[^\s@]+@[^\s@]+$/.test(input)) return input;
+
+  const cidMatch = input.match(/[?&]cid=([^&#]+)/i);
+  if (!cidMatch) return "";
+  let encoded = cidMatch[1];
+  try { encoded = decodeURIComponent(encoded); } catch (ignore) {}
+  encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  while (encoded.length % 4) encoded += "=";
+  try {
+    const decoded = Utilities.newBlob(Utilities.base64Decode(encoded)).getDataAsString().trim();
+    return /^[^\s@]+@[^\s@]+$/.test(decoded) ? decoded : "";
+  } catch (error) {
+    return "";
+  }
+}
+
+/**
+ * 提供給前端「日曆」頁面使用的資訊。
+ * 只讀 Script Properties，不呼叫 CalendarApp，避免拖慢每 12 秒一次的同步。
+ * 日曆 ID 本來就必須送到瀏覽器才能嵌入與訂閱，因此可以回傳；
+ * 但仍然不寫進前端程式碼或 GitHub。
+ */
+function getCalendarPublicInfo_() {
+  const properties = PropertiesService.getScriptProperties();
+  const calendarId = String(properties.getProperty(APP_CONFIG.CALENDAR_ID_PROPERTY) || "").trim();
+  return {
+    configured: Boolean(calendarId),
+    calendarId: calendarId,
+    name: String(properties.getProperty(APP_CONFIG.CALENDAR_NAME_PROPERTY) || "").trim()
+  };
+}
+
+function getConfiguredCalendarId_() {
+  return String(
+    PropertiesService.getScriptProperties().getProperty(APP_CONFIG.CALENDAR_ID_PROPERTY) || ""
+  ).trim();
+}
+
+function syncAllExistingEventsToCalendar() {
+  const ui = SpreadsheetApp.getUi();
+  const calendarId = getConfiguredCalendarId_();
+  if (!calendarId) {
+    ui.alert("尚未設定 Google 日曆。請先執行「設定 Google 日曆」。");
+    return;
+  }
+
+  const calendar = CalendarApp.getCalendarById(calendarId);
+  if (!calendar) {
+    ui.alert("無法存取已設定的 Google 日曆，請重新設定。");
+    return;
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
+  try {
+    const sheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
+    if (!hasRequiredHeaders_(sheet, EVENT_HEADERS)) {
+      ui.alert("請先執行「初始化／修復表格」，新增 calendarEventId 欄位。");
+      return;
+    }
+
+    let syncedCount = 0;
+    let skippedCount = 0;
+    readAllEvents_(sheet).forEach(eventItem => {
+      if (!shouldSyncCalendarEvent_(eventItem)) {
+        skippedCount += 1;
+        return;
+      }
+      const calendarEventId = syncToGoogleCalendar_(eventItem, "save");
+      if (calendarEventId === null) {
+        skippedCount += 1;
+        return;
+      }
+      eventItem.calendarEventId = calendarEventId;
+      eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+      const found = findEventById_(sheet, eventItem.id);
+      if (found) writeEvent_(sheet, found.rowNumber, eventItem);
+      syncedCount += 1;
+    });
+    SpreadsheetApp.flush();
+    ui.alert("日曆同步完成：" + syncedCount + " 筆已同步，" + skippedCount + " 筆已跳過。");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 日曆診斷：回報設定狀態、日曆上實際的行程數，以及表格中失效的連結數。
+ * 只輸出統計與狀態，不顯示活動內容或成員資料。
+ */
+function checkCalendarStatus() {
+  const ui = SpreadsheetApp.getUi();
+  const calendarId = getConfiguredCalendarId_();
+  if (!calendarId) {
+    ui.alert("日曆診斷", "尚未設定 Google 日曆。請先執行「設定 Google 日曆」。", ui.ButtonSet.OK);
+    return;
+  }
+
+  const calendar = CalendarApp.getCalendarById(calendarId);
+  if (!calendar) {
+    ui.alert("日曆診斷", "已設定日曆 ID，但目前帳號無法存取這本日曆。", ui.ButtonSet.OK);
+    return;
+  }
+
+  const sheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
+  const allEvents = readAllEvents_(sheet);
+  const shouldSync = allEvents.filter(shouldSyncCalendarEvent_);
+
+  let liveLinks = 0;
+  let deadLinks = 0;
+  let missingLinks = 0;
+  shouldSync.forEach(eventItem => {
+    if (!eventItem.calendarEventId) { missingLinks += 1; return; }
+    let candidate = null;
+    try { candidate = calendar.getEventById(String(eventItem.calendarEventId)); } catch (ignore) {}
+    if (candidate && isCalendarEventLive_(calendar, candidate)) liveLinks += 1;
+    else deadLinks += 1;
+  });
+
+  const now = new Date();
+  const upcoming = calendar.getEvents(now, new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000));
+  const ourEvents = upcoming.filter(item => String(item.getTitle() || "").indexOf("【揪團】") === 0);
+
+  ui.alert("日曆診斷", [
+    "日曆名稱：" + calendar.getName(),
+    "可否寫入：" + (getCalendarWriteError_(calendar) ? "否" : "是"),
+    "",
+    "── 表格這一側 ──",
+    "活動總數：" + allEvents.length,
+    "應同步（未過期、非固定團）：" + shouldSync.length,
+    "  連結有效：" + liveLinks,
+    "  連結已失效（行程被刪）：" + deadLinks,
+    "  尚未建立連結：" + missingLinks,
+    "",
+    "── 日曆這一側（未來 90 天）──",
+    "行程總數：" + upcoming.length,
+    "其中「【揪團】」開頭：" + ourEvents.length,
+    "",
+    deadLinks + missingLinks > 0
+      ? "建議：執行「同步現有未過期活動」重建 " + (deadLinks + missingLinks) + " 筆行程。"
+      : "表格與日曆連結一致。"
+  ].join("\n"), ui.ButtonSet.OK);
 }
 
 function setAdminPassword() {
@@ -120,7 +386,7 @@ function setupProject() {
     SpreadsheetApp.flush();
     return {
       status: "success",
-      message: "Events 與 AuditLog 已完成初始化。"
+      message: "Events 與 AuditLog 已完成初始化，表格結構版本為 " + APP_CONFIG.SCHEMA_VERSION + "。"
     };
   } finally {
     lock.releaseLock();
@@ -132,6 +398,7 @@ function showSchemaInfo() {
     "Events：保存活動目前狀態，status 為 active 或 deleted。",
     "固定團：isFixedGroup 為 TRUE，固定時間保存在 fixedTimeText。",
     "固定參與與本週參與分別保存在 fixedAttendees 與 weeklyAttendees。",
+    "Google 日曆：calendarEventId 保存對應行程 ID，日曆 ID 只保存在 Script Properties。",
     "AuditLog：永久保存建立、報名、退出、編輯、交棒與刪除紀錄。",
     "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。"
   ].join("\n");
@@ -150,6 +417,7 @@ function doGet(e) {
       status: "success",
       schemaVersion: schemaReady ? APP_CONFIG.SCHEMA_VERSION : "1",
       serverTime: new Date().toISOString(),
+      calendar: getCalendarPublicInfo_(),
       events: events
     });
   } catch (error) {
@@ -334,6 +602,9 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
 
   if (existingEvent) {
     // 編輯活動只改活動內容，名單永遠以 GAS 目前資料為準，避免舊分頁覆蓋新報名。
+    // calendarEventId 只由 GAS 產生與保管，一律忽略前端送來的值；
+    // 否則舊快照的空字串會清掉連結，下次儲存就會另外建立重複的日曆行程。
+    normalizedEvent.calendarEventId = String(existingEvent.calendarEventId || "");
     normalizedEvent.isFixedGroup = existingEvent.isFixedGroup === true;
     normalizedEvent.fixedAttendees = normalizeUsers_(existingEvent.fixedAttendees);
     normalizedEvent.weeklyAttendees = normalizeUsers_(existingEvent.weeklyAttendees);
@@ -364,6 +635,8 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
       normalizedEvent.hostName = existingEvent.hostName;
     }
   } else {
+    // 新活動一律從沒有日曆行程開始，不接受前端帶進來的 calendarEventId。
+    normalizedEvent.calendarEventId = "";
     const creatingHost = normalizeUser_(normalizedEvent.hostUser);
     if (normalizedEvent.isFixedGroup) {
       normalizedEvent.fixedAttendees = normalizeUsers_([creatingHost].concat(normalizedEvent.fixedAttendees || []));
@@ -396,7 +669,7 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
   const changedFields = getChangedFields_(existingEvent, normalizedEvent);
 
   const calEventId = syncToGoogleCalendar_(normalizedEvent, "save");
-  if (calEventId) normalizedEvent.calendarEventId = calEventId;
+  if (calEventId !== null) normalizedEvent.calendarEventId = calEventId;
 
   writeEvent_(eventsSheet, found && found.rowNumber, normalizedEvent);
   appendAudit_(auditSheet, payload, {
@@ -454,7 +727,6 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
   eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   eventItem.updatedAt = new Date().toISOString();
   eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
-  syncToGoogleCalendar_(eventItem, "update");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   appendAudit_(auditSheet, payload, {
@@ -511,7 +783,6 @@ function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
     eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   }
   eventItem.updatedAt = new Date().toISOString();
-  syncToGoogleCalendar_(eventItem, "update");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   appendAudit_(auditSheet, payload, {
@@ -582,7 +853,6 @@ function updateFixedGroupRsvp_(eventsSheet, auditSheet, found, payload, userId) 
   eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   eventItem.updatedAt = new Date().toISOString();
   eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
-  syncToGoogleCalendar_(eventItem, "update");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   const actionMap = {
@@ -634,7 +904,8 @@ function softDeleteEvent_(eventsSheet, auditSheet, payload) {
   eventItem.updatedAt = nowIso;
   eventItem.history = mergeHistoryEntries_(eventItem.history, getFirstHistoryEntry_(payload.history));
   eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
-  syncToGoogleCalendar_(eventItem, "delete");
+  const calendarEventId = syncToGoogleCalendar_(eventItem, "delete");
+  if (calendarEventId !== null) eventItem.calendarEventId = calendarEventId;
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   appendAudit_(auditSheet, payload, {
@@ -713,6 +984,7 @@ function formatEventsSheet_(sheet) {
   setColumnWidthIfPresent_(sheet, map, "hostName", 130);
   setColumnWidthIfPresent_(sheet, map, "fee", 120);
   setColumnWidthIfPresent_(sheet, map, "description", 280);
+  setColumnWidthIfPresent_(sheet, map, "calendarEventId", 240);
   setColumnWidthIfPresent_(sheet, map, "updatedAt", 190);
   setColumnWidthIfPresent_(sheet, map, "deletedAt", 190);
 
@@ -858,6 +1130,7 @@ function normalizeEvent_(payload, existingEvent) {
     fixedAttendees: normalizeUsers_(source.fixedAttendees),
     weeklyAttendees: normalizeUsers_(source.weeklyAttendees),
     history: Array.isArray(source.history) ? source.history : [],
+    calendarEventId: String(source.calendarEventId || ""),
     createdAt: String(source.createdAt || ""),
     updatedAt: String(source.updatedAt || ""),
     deletedAt: String(source.deletedAt || ""),
@@ -1083,84 +1356,137 @@ function errorOutput_(error) {
 }
 
 /**
- * 將活動自動同步到指定的 Google 日曆
+ * 將活動自動同步到指定 Google 日曆。
+ * - 只處理有明確日期時間的一般活動；固定團不登記。
+ * - 已過期活動保留原日曆記錄，不再修改。
+ * - 只同步活動名稱、時間與地點，不寫入說明或成員資料。
+ * - 回傳 null 代表未變更；空字串代表已刪除；其他字串為 Calendar Event ID。
  */
 function syncToGoogleCalendar_(eventItem, actionType) {
-  if (!APP_CONFIG.CALENDAR_ID) return null;
+  const calendarId = getConfiguredCalendarId_();
+  if (!calendarId) return null;
+
+  const timeRange = getCalendarTimeRange_(eventItem);
+  if (!timeRange) return null;
+
+  // 已過期活動不修改，包含不因網頁刪除而移除歷史日曆記錄。
+  if (timeRange.endTime.getTime() < Date.now()) {
+    return eventItem.calendarEventId || null;
+  }
+
   try {
-    const calendar = CalendarApp.getCalendarById(APP_CONFIG.CALENDAR_ID);
+    const calendar = CalendarApp.getCalendarById(calendarId);
     if (!calendar) {
-      console.warn("無法取得指定 ID 的 Google 日曆，請檢查日曆存取權限。ID: " + APP_CONFIG.CALENDAR_ID);
+      console.warn("無法存取已設定的 Google 日曆。");
       return null;
+    }
+
+    // getEventById 對「已取消／已刪除」的行程仍會回傳物件，
+    // 而對取消的行程 setTitle／setTime 不會讓它重新出現在日曆上。
+    // 因此必須確認取回的行程是活的，否則要當成不存在、重新建立。
+    let calendarEvent = null;
+    if (eventItem.calendarEventId) {
+      try {
+        const candidate = calendar.getEventById(String(eventItem.calendarEventId));
+        if (candidate && isCalendarEventLive_(calendar, candidate)) calendarEvent = candidate;
+      } catch (ignore) {}
     }
 
     if (actionType === "delete") {
-      if (eventItem.calendarEventId) {
-        try {
-          const calEvent = calendar.getEventById(eventItem.calendarEventId);
-          if (calEvent) calEvent.deleteEvent();
-        } catch (delErr) {
-          console.warn("刪除 Google 日曆行程失敗或行程不存在：" + delErr.message);
-        }
-      }
-      return null;
+      if (calendarEvent) calendarEvent.deleteEvent();
+      return "";
     }
 
-    let startTime = null;
-    let endTime = null;
-    if (eventItem.datetime) {
-      const parsed = new Date(String(eventItem.datetime).replace(" ", "T"));
-      if (!isNaN(parsed.getTime())) {
-        startTime = parsed;
-        endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
-      }
+    const title = `【揪團】${String(eventItem.title || "未命名活動")}`;
+    const location = getCalendarLocation_(eventItem.location);
+
+    if (calendarEvent) {
+      calendarEvent.setTitle(title);
+      calendarEvent.setTime(timeRange.startTime, timeRange.endTime);
+      calendarEvent.setLocation(location);
+      return calendarEvent.getId();
     }
 
-    const title = `【揪團】${eventItem.title}` + (eventItem.hostName ? ` (主揪: ${eventItem.hostName})` : "");
-    const description = [
-      `活動名稱：${eventItem.title}`,
-      `時間：${eventItem.isFixedGroup ? eventItem.fixedTimeText : (eventItem.datetime || "未指定")}`,
-      `地點：${eventItem.location || "未指定"}`,
-      `主揪：${eventItem.hostName || "未指定"}`,
-      `費用：${eventItem.fee || "免費"}`,
-      `補充說明：${eventItem.description || "無"}`,
-      `已報名人數：${(eventItem.attendees || []).length} 人`,
-      `報名名額名單：${(eventItem.attendees || []).map(u => u.displayName).join("、")}`
-    ].join("\n");
-
-    const location = String(eventItem.location || "").replace(/https?:\/\/[^\s]+/g, "").trim();
-
-    let calEvent = null;
-    if (eventItem.calendarEventId) {
-      try {
-        calEvent = calendar.getEventById(eventItem.calendarEventId);
-      } catch (e) {}
-    }
-
-    if (calEvent) {
-      calEvent.setTitle(title);
-      calEvent.setDescription(description);
-      if (location) calEvent.setLocation(location);
-      if (startTime && endTime) {
-        calEvent.setTime(startTime, endTime);
-      }
-      return calEvent.getId();
-    } else {
-      if (startTime && endTime) {
-        calEvent = calendar.createEvent(title, startTime, endTime, {
-          description: description,
-          location: location
-        });
-      } else {
-        calEvent = calendar.createAllDayEvent(title, new Date(), {
-          description: description,
-          location: location
-        });
-      }
-      return calEvent ? calEvent.getId() : null;
-    }
-  } catch (err) {
-    console.warn("Google 日曆同步發生例外：" + err.message);
+    const createdEvent = calendar.createEvent(
+      title,
+      timeRange.startTime,
+      timeRange.endTime,
+      { location: location }
+    );
+    return createdEvent ? createdEvent.getId() : null;
+  } catch (error) {
+    console.warn("Google 日曆同步失敗：" + String(error && error.message ? error.message : error));
     return null;
   }
+}
+
+/**
+ * 確認行程是否真的還存在於日曆上。
+ * getEvents() 只回傳未取消的行程，因此用它反查 ID 是否仍在，
+ * 藉此分辨「行程還在」與「行程已被刪除但 ID 仍可取回」。
+ */
+function isCalendarEventLive_(calendar, calendarEvent) {
+  try {
+    const eventId = calendarEvent.getId();
+    const startTime = calendarEvent.getStartTime();
+    if (!eventId || !startTime) return false;
+    return calendar
+      .getEvents(new Date(startTime.getTime() - 60000), new Date(startTime.getTime() + 60000))
+      .some(item => item.getId() === eventId);
+  } catch (error) {
+    return false;
+  }
+}
+
+function shouldSyncCalendarEvent_(eventItem) {
+  if (!eventItem || isDeletedEvent_(eventItem) || eventItem.isFixedGroup === true) return false;
+  const timeRange = getCalendarTimeRange_(eventItem);
+  return Boolean(timeRange && timeRange.endTime.getTime() >= Date.now());
+}
+
+function getCalendarTimeRange_(eventItem) {
+  if (!eventItem || eventItem.isFixedGroup === true) return null;
+  const startTime = parseCalendarStartTime_(eventItem.datetime);
+  if (!startTime) return null;
+  return {
+    startTime: startTime,
+    endTime: new Date(startTime.getTime() + 2 * 60 * 60 * 1000)
+  };
+}
+
+function parseCalendarStartTime_(dateTimeValue) {
+  if (dateTimeValue instanceof Date && !isNaN(dateTimeValue.getTime())) {
+    return new Date(dateTimeValue.getTime());
+  }
+
+  const text = String(dateTimeValue || "").trim();
+  if (!text) return null;
+  const localMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (localMatch) {
+    try {
+      const localText = [localMatch[1], localMatch[2], localMatch[3]].join("-") +
+        " " + localMatch[4] + ":" + localMatch[5];
+      const parsedLocal = Utilities.parseDate(
+        localText,
+        Session.getScriptTimeZone(),
+        "yyyy-MM-dd HH:mm"
+      );
+      if (!isNaN(parsedLocal.getTime())) return parsedLocal;
+    } catch (ignore) {}
+  }
+
+  const parsed = new Date(text);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * 取得要寫進日曆「地點」欄的文字。
+ * 使用解析後的地點名稱／地址，不附帶原始短網址；
+ * 帶著裸網址會讓 Google 日曆無法正確帶出地圖。
+ */
+function getCalendarLocation_(locationValue) {
+  const location = String(locationValue || "待定").trim() || "待定";
+  if (!/https?:\/\//i.test(location)) return location;
+  const resolved = resolveMapLocation_(location);
+  return String(resolved.displayName || resolved.location || location);
 }
