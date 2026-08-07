@@ -299,15 +299,105 @@
       cursor: wait;
     }
 
-    /* LINE Event Cards */
+    /* LINE Event Cards (3-Tier Collapsible Card System) */
     .event-card {
       background: var(--line-card-bg);
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      border-radius: 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
       position: relative;
-      transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    /* 1️⃣ 第一層：單行折疊標頭 */
+    .card-summary-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      background: #ffffff;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+
+    .card-summary-bar:active {
+      background: #f8fafc;
+    }
+
+    .card-summary-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .event-time-chip {
+      background: #f1f5f9;
+      color: #475569;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 800;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .event-summary-title {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #0f172a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .card-summary-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .expand-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      color: #94a3b8;
+      font-size: 11px;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* 2️⃣ 第二層：展開內容主體 */
+    .card-body-collapsible {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.3s ease;
+      padding: 0 14px;
+    }
+
+    /* 展開狀態 */
+    .event-card.is-expanded .expand-icon {
+      transform: rotate(180deg);
+      color: var(--line-green-dark);
+    }
+
+    .event-card.is-expanded .card-summary-bar {
+      border-bottom: 1px dashed #e2e8f0;
+      background: #fafafa;
+    }
+
+    .event-card.is-expanded .card-body-collapsible {
+      max-height: 1200px;
+      opacity: 1;
+      padding: 12px 14px 14px 14px;
     }
 
     .card-header {
@@ -1210,7 +1300,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260806.0926", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260807.1105", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2178,6 +2268,32 @@
       return `${yyyy}-${mm}-${dd}T${timeStr}`;
     }
 
+    const expandedEventIds = new Set();
+
+    function toggleEventExpand(eventId, event) {
+      if (event && (event.target.closest("button") || event.target.closest("a"))) return;
+      if (expandedEventIds.has(eventId)) {
+        expandedEventIds.delete(eventId);
+      } else {
+        expandedEventIds.add(eventId);
+      }
+      renderEvents();
+    }
+
+    function getEventShortTimeText(evt) {
+      if (!evt) return "";
+      if (isFixedGroup(evt)) {
+        return evt.fixedTimeText || "固定團";
+      }
+      const dt = parseSafeDate(evt.datetime);
+      if (!dt || isNaN(dt.getTime())) return "時間待定";
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const hh = String(dt.getHours()).padStart(2, '0');
+      const min = String(dt.getMinutes()).padStart(2, '0');
+      return `${mm}/${dd} ${hh}:${min}`;
+    }
+
     function getFormattedNow() {
       const d = new Date();
       const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -2402,9 +2518,11 @@
         }
 
         const formattedTime = getEventTimeText(evt);
+        const shortTimeText = getEventShortTimeText(evt);
+        const isExpanded = expandedEventIds.has(evt.id);
 
         const cardEl = document.createElement("div");
-        cardEl.className = `event-card ${isEnded ? 'ended' : ''}`;
+        cardEl.className = `event-card ${isEnded ? 'ended' : ''} ${isExpanded ? 'is-expanded' : ''}`;
 
         let actionButtonsHtml = "";
         if (fixedGroup) {
@@ -2438,26 +2556,40 @@
           : `<a class="line-btn btn-calendar" href="${generateGoogleCalendarUrl(evt)}" target="_blank" rel="noopener noreferrer">加到行事曆</a>`;
 
         cardEl.innerHTML = `
-          <div class="card-header">
-            <div class="card-title">${escapeHtml(evt.title)}</div>
-            <div class="tag-badge ${tagClass}">${tagText}</div>
-          </div>
-          
-          <div class="card-info">
-            <div class="info-row"><span class="info-label">時間：</span><span>${formattedTime}</span></div>
-            <div class="info-row"><span class="info-label">地點：</span><span class="event-location"></span></div>
-            <div class="info-row"><span class="info-label">費用：</span><span>${escapeHtml(evt.fee || "免費")}</span></div>
-            <div class="info-row"><span class="info-label">主揪：</span><span>${escapeHtml(evt.hostName || evt.hostUser?.displayName || "無")}</span></div>
-            <div class="info-row">
-              <span class="info-label">人數：</span>
-              <span style="color:var(--line-green-dark); font-weight:bold;">${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人</span>
+          <!-- 1️⃣ 第一層：折疊單行標頭 -->
+          <div class="card-summary-bar" onclick="toggleEventExpand('${evt.id}', event)">
+            <div class="card-summary-left">
+              <span class="event-time-chip">${escapeHtml(shortTimeText)}</span>
+              <span class="event-summary-title">${escapeHtml(evt.title)}</span>
+            </div>
+            <div class="card-summary-right">
+              <span class="tag-badge ${tagClass}">${tagText}</span>
+              <span class="expand-icon" aria-label="展開與收合">▼</span>
             </div>
           </div>
 
-          <div class="card-actions ${fixedGroup ? "fixed-actions" : ""}">
-            ${actionButtonsHtml}
-            <button class="line-btn btn-detail detail-action">詳情</button>
-            ${calendarHtml}
+          <!-- 2️⃣ 第二層：展開內容主體 -->
+          <div class="card-body-collapsible">
+            <div class="card-header">
+              <div class="card-title">${escapeHtml(evt.title)}</div>
+            </div>
+            
+            <div class="card-info">
+              <div class="info-row"><span class="info-label">時間：</span><span>${formattedTime}</span></div>
+              <div class="info-row"><span class="info-label">地點：</span><span class="event-location"></span></div>
+              <div class="info-row"><span class="info-label">費用：</span><span>${escapeHtml(evt.fee || "免費")}</span></div>
+              <div class="info-row"><span class="info-label">主揪：</span><span>${escapeHtml(evt.hostName || evt.hostUser?.displayName || "無")}</span></div>
+              <div class="info-row">
+                <span class="info-label">人數：</span>
+                <span style="color:var(--line-green-dark); font-weight:bold;">${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人</span>
+              </div>
+            </div>
+
+            <div class="card-actions ${fixedGroup ? "fixed-actions" : ""}">
+              ${actionButtonsHtml}
+              <button class="line-btn btn-detail detail-action">活動詳情</button>
+              ${calendarHtml}
+            </div>
           </div>
         `;
 
@@ -2745,6 +2877,7 @@ ${pageUrl}`;
       };
 
       addHistoryLog(newEvent, fixedGroup ? "建立固定團並成為主揪" : "建立活動並成為主揪", "create");
+      expandedEventIds.add(newEvent.id);
 
       eventsData.push(newEvent);
       saveLocalEvents();
