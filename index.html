@@ -489,6 +489,30 @@
       font-size: 12px;
       font-weight: 600;
       color: #334155;
+      position: relative;
+    }
+
+    /* Admin Attendee Removal Button */
+    .btn-remove-attendee {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fee2e2;
+      color: #ef4444;
+      font-size: 11px;
+      font-weight: 900;
+      margin-left: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+      line-height: 1;
+    }
+
+    .btn-remove-attendee:hover {
+      background: #ef4444;
+      color: #ffffff;
     }
 
     .attendee-pill img {
@@ -1300,7 +1324,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260807.1108", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260807.1110", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2292,6 +2316,59 @@
       return `${mm}/${dd}`;
     }
 
+    function canManageAttendees(evt) {
+      if (!evt) return false;
+      return currentUserCanDeleteAnyEvent || isCurrentUserHost(evt);
+    }
+
+    function adminRemoveAttendee(eventId, targetUserId, targetUserName, event) {
+      if (event) event.stopPropagation();
+      if (!ensureLoggedIn()) return;
+
+      const evt = eventsData.find(e => e.id === eventId);
+      if (!evt) return;
+
+      if (!canManageAttendees(evt)) {
+        alert("只有主揪或管理員可以移除成員！");
+        return;
+      }
+
+      const hostUserId = evt.hostUser?.userId || "";
+      if (targetUserId === hostUserId) {
+        alert("主揪無法直接被移除，請先透過編輯更換主揪！");
+        return;
+      }
+
+      if (confirm(`確定要將成員「${targetUserName}」從活動「${evt.title}」的名單中移除嗎？`)) {
+        evt.attendees = (evt.attendees || []).filter(u => String(u.userId) !== String(targetUserId));
+        
+        if (isFixedGroup(evt)) {
+          evt.fixedAttendees = (evt.fixedAttendees || []).filter(u => String(u.userId) !== String(targetUserId));
+          evt.weeklyAttendees = (evt.weeklyAttendees || []).filter(u => String(u.userId) !== String(targetUserId));
+          normalizeFixedGroupParticipation(evt);
+        }
+
+        addHistoryLog(evt, `管理員移除成員 ${targetUserName}`, "leave");
+        saveLocalEvents();
+        renderEvents();
+        if (document.getElementById("modal-detail").getAttribute("aria-hidden") === "false") {
+          openEventDetailModal(eventId);
+        }
+        showToast(`已將 ${targetUserName} 從活動名冊中移除`);
+
+        sendPostToGAS({
+          action: "adminRemoveAttendee",
+          eventId: evt.id,
+          targetUserId: targetUserId,
+          targetUserName: targetUserName,
+          actorUserId: currentUser.userId,
+          adminPassword: currentAdminPassword,
+          history: evt.history,
+          historyEntry: evt.history[0]
+        });
+      }
+    }
+
     function getFormattedNow() {
       const d = new Date();
       const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -2588,6 +2665,26 @@
               <button class="line-btn btn-detail detail-action">活動詳情</button>
               ${calendarHtml}
             </div>
+
+            ${evt.attendees.length > 0 ? `
+              <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                ${evt.attendees.map(u => {
+                  const uName = escapeHtml(u.displayName || "未命名");
+                  const uPic = getSafeImageUrl(u.pictureUrl, u.displayName);
+                  const isHostUser = String(u.userId) === String(evt.hostUser?.userId || "");
+                  const removeBtn = (canManageAttendees(evt) && !isHostUser)
+                    ? `<span class="btn-remove-attendee" title="移除成員" onclick="adminRemoveAttendee('${evt.id}', '${escapeHtml(u.userId)}', '${uName}', event)">✕</span>`
+                    : "";
+                  return `
+                    <div class="attendee-pill" title="${uName}">
+                      <img src="${uPic}" alt="${uName}的頭像" />
+                      <span>${uName}</span>
+                      ${removeBtn}
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            ` : ""}
           </div>
         `;
 
@@ -3078,6 +3175,14 @@ ${pageUrl}`;
               ? "固定"
               : "本週";
             pill.append(type);
+          }
+          if (canManageAttendees(evt) && String(u.userId) !== String(evt.hostUser?.userId || "")) {
+            const removeBtn = document.createElement("span");
+            removeBtn.className = "btn-remove-attendee";
+            removeBtn.title = "移除成員";
+            removeBtn.textContent = "✕";
+            removeBtn.onclick = (e) => adminRemoveAttendee(evt.id, u.userId, displayName, e);
+            pill.append(removeBtn);
           }
           attendeesEl.append(pill);
         });

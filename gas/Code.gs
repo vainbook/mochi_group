@@ -206,6 +206,9 @@ function doPost(e) {
       case "deleteEvent":
         result = softDeleteEvent_(eventsSheet, auditSheet, payload);
         break;
+      case "adminRemoveAttendee":
+        result = adminRemoveAttendee_(eventsSheet, auditSheet, payload);
+        break;
       default:
         throw new Error("不支援的 action：" + String(payload.action || "空白"));
     }
@@ -462,6 +465,61 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
   return {
     eventId: eventId,
     rsvpAction: intent,
+    attendees: eventItem.attendees,
+    history: eventItem.history
+  };
+}
+
+function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
+  const eventId = requireText_(payload.eventId, "缺少 eventId");
+  const targetUserId = requireText_(payload.targetUserId, "缺少 targetUserId");
+  const actorUserId = requireText_(payload.actorUserId, "缺少 actorUserId");
+
+  const found = requireEvent_(eventsSheet, eventId);
+  const eventItem = found.event;
+  assertActiveEvent_(eventItem);
+
+  const isHost = String(getHostUserId_(eventItem)) === actorUserId;
+  const isAdmin = verifyAdminPassword_(payload.adminPassword);
+
+  if (!isHost && !isAdmin) {
+    throw new Error("只有主揪或管理員可以移除成員。");
+  }
+
+  if (String(getHostUserId_(eventItem)) === targetUserId) {
+    throw new Error("主揪無法被移除，請先透過編輯更換主揪。");
+  }
+
+  let attendees = normalizeUsers_(eventItem.attendees);
+  attendees = attendees.filter(u => String(u.userId) !== targetUserId);
+  eventItem.attendees = attendees;
+
+  if (eventItem.isFixedGroup === true) {
+    let fixedList = normalizeUsers_(eventItem.fixedAttendees);
+    let weeklyList = normalizeUsers_(eventItem.weeklyAttendees);
+    eventItem.fixedAttendees = fixedList.filter(u => String(u.userId) !== targetUserId);
+    eventItem.weeklyAttendees = weeklyList.filter(u => String(u.userId) !== targetUserId);
+  }
+
+  if (payload.historyEntry) {
+    eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
+  }
+  eventItem.updatedAt = new Date().toISOString();
+  writeEvent_(eventsSheet, found.rowNumber, eventItem);
+
+  appendAudit_(auditSheet, payload, {
+    eventId: eventId,
+    actionType: "admin_remove_attendee",
+    action: `管理員移除成員 ${payload.targetUserName || targetUserId}`,
+    details: {
+      targetUserId: targetUserId,
+      targetUserName: String(payload.targetUserName || ""),
+      actorUserId: actorUserId
+    }
+  });
+
+  return {
+    eventId: eventId,
     attendees: eventItem.attendees,
     history: eventItem.history
   };
