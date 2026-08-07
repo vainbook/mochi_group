@@ -1300,7 +1300,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260807.1105", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260807.1108", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2286,12 +2286,10 @@
         return evt.fixedTimeText || "固定團";
       }
       const dt = parseSafeDate(evt.datetime);
-      if (!dt || isNaN(dt.getTime())) return "時間待定";
+      if (!dt || isNaN(dt.getTime())) return "日期待定";
       const mm = String(dt.getMonth() + 1).padStart(2, '0');
       const dd = String(dt.getDate()).padStart(2, '0');
-      const hh = String(dt.getHours()).padStart(2, '0');
-      const min = String(dt.getMinutes()).padStart(2, '0');
-      return `${mm}/${dd} ${hh}:${min}`;
+      return `${mm}/${dd}`;
     }
 
     function getFormattedNow() {
