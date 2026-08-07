@@ -16,6 +16,7 @@ const APP_CONFIG = Object.freeze({
   STATUS_DELETED: "deleted",
   ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
   ADMIN_PASSWORD_SALT_PROPERTY: "ADMIN_PASSWORD_SALT",
+  CALENDAR_ID: "13e4b1b0711e7392696c8f71839179b65ec5f9dbdf03f2dd2a665862c490ecfc@group.calendar.google.com",
   LOCK_TIMEOUT_MS: 15000,
   SCHEMA_VERSION: "2"
 });
@@ -37,6 +38,7 @@ const EVENT_HEADERS = Object.freeze([
   "fixedAttendees",
   "weeklyAttendees",
   "history",
+  "calendarEventId",
   "createdAt",
   "updatedAt",
   "deletedAt",
@@ -393,6 +395,9 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
 
   const changedFields = getChangedFields_(existingEvent, normalizedEvent);
 
+  const calEventId = syncToGoogleCalendar_(normalizedEvent, "save");
+  if (calEventId) normalizedEvent.calendarEventId = calEventId;
+
   writeEvent_(eventsSheet, found && found.rowNumber, normalizedEvent);
   appendAudit_(auditSheet, payload, {
     eventId: eventId,
@@ -449,6 +454,7 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
   eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   eventItem.updatedAt = new Date().toISOString();
   eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+  syncToGoogleCalendar_(eventItem, "update");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   appendAudit_(auditSheet, payload, {
@@ -505,6 +511,7 @@ function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
     eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   }
   eventItem.updatedAt = new Date().toISOString();
+  syncToGoogleCalendar_(eventItem, "update");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   appendAudit_(auditSheet, payload, {
@@ -575,6 +582,7 @@ function updateFixedGroupRsvp_(eventsSheet, auditSheet, found, payload, userId) 
   eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   eventItem.updatedAt = new Date().toISOString();
   eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+  syncToGoogleCalendar_(eventItem, "update");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   const actionMap = {
@@ -626,6 +634,7 @@ function softDeleteEvent_(eventsSheet, auditSheet, payload) {
   eventItem.updatedAt = nowIso;
   eventItem.history = mergeHistoryEntries_(eventItem.history, getFirstHistoryEntry_(payload.history));
   eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+  syncToGoogleCalendar_(eventItem, "delete");
   writeEvent_(eventsSheet, found.rowNumber, eventItem);
 
   appendAudit_(auditSheet, payload, {
@@ -1071,4 +1080,87 @@ function errorOutput_(error) {
     status: "error",
     message: error && error.message ? error.message : String(error)
   });
+}
+
+/**
+ * 將活動自動同步到指定的 Google 日曆
+ */
+function syncToGoogleCalendar_(eventItem, actionType) {
+  if (!APP_CONFIG.CALENDAR_ID) return null;
+  try {
+    const calendar = CalendarApp.getCalendarById(APP_CONFIG.CALENDAR_ID);
+    if (!calendar) {
+      console.warn("無法取得指定 ID 的 Google 日曆，請檢查日曆存取權限。ID: " + APP_CONFIG.CALENDAR_ID);
+      return null;
+    }
+
+    if (actionType === "delete") {
+      if (eventItem.calendarEventId) {
+        try {
+          const calEvent = calendar.getEventById(eventItem.calendarEventId);
+          if (calEvent) calEvent.deleteEvent();
+        } catch (delErr) {
+          console.warn("刪除 Google 日曆行程失敗或行程不存在：" + delErr.message);
+        }
+      }
+      return null;
+    }
+
+    let startTime = null;
+    let endTime = null;
+    if (eventItem.datetime) {
+      const parsed = new Date(String(eventItem.datetime).replace(" ", "T"));
+      if (!isNaN(parsed.getTime())) {
+        startTime = parsed;
+        endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
+      }
+    }
+
+    const title = `【揪團】${eventItem.title}` + (eventItem.hostName ? ` (主揪: ${eventItem.hostName})` : "");
+    const description = [
+      `活動名稱：${eventItem.title}`,
+      `時間：${eventItem.isFixedGroup ? eventItem.fixedTimeText : (eventItem.datetime || "未指定")}`,
+      `地點：${eventItem.location || "未指定"}`,
+      `主揪：${eventItem.hostName || "未指定"}`,
+      `費用：${eventItem.fee || "免費"}`,
+      `補充說明：${eventItem.description || "無"}`,
+      `已報名人數：${(eventItem.attendees || []).length} 人`,
+      `報名名額名單：${(eventItem.attendees || []).map(u => u.displayName).join("、")}`
+    ].join("\n");
+
+    const location = String(eventItem.location || "").replace(/https?:\/\/[^\s]+/g, "").trim();
+
+    let calEvent = null;
+    if (eventItem.calendarEventId) {
+      try {
+        calEvent = calendar.getEventById(eventItem.calendarEventId);
+      } catch (e) {}
+    }
+
+    if (calEvent) {
+      calEvent.setTitle(title);
+      calEvent.setDescription(description);
+      if (location) calEvent.setLocation(location);
+      if (startTime && endTime) {
+        calEvent.setTime(startTime, endTime);
+      }
+      return calEvent.getId();
+    } else {
+      if (startTime && endTime) {
+        calEvent = calendar.createEvent(title, startTime, endTime, {
+          description: description,
+          location: location
+        });
+      } else {
+        calEvent = calendar.createAllDayEvent(title, new Date(), {
+          description: description,
+          location: location
+        });
+      }
+      return calEvent ? calEvent.getId() : null;
+    }
+  } catch (err) {
+    console.warn("Google 日曆同步發生例外：" + err.message);
+    return null;
+  }
 }
