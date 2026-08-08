@@ -45,7 +45,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 
 | 機制 | 作用 |
 |---|---|
-| `history` 上限 30 筆 | 活動列只留最近 30 筆操作紀錄。固定團永不過期，沒有上限會無限膨脹。完整紀錄仍在 `AuditLog`。 |
+| `history` 上限 50 筆 | 活動列只留最近 50 筆操作紀錄（含留言）。固定團永不過期，沒有上限會無限膨脹。完整紀錄仍在 `AuditLog`。 |
 | `doGet` 過濾 | 已刪除與過期活動不回傳給前端。 |
 | 每日自動歸檔 | 凌晨 4 點把已刪除與過期活動搬到 `EventsArchive`，並從 `Events` 移除。 |
 
@@ -95,13 +95,14 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `timestamp` | 伺服器紀錄時間 |
 | `actorUserId` | 操作者 LINE userId |
 | `actorName` | 操作者名稱 |
-| `actionType` | `create`、`join`、`leave`、`fixed_join`、`weekly_join`、`fixed_cancel`、`weekly_cancel`、`update`、`handoff`、`delete` |
+| `actionType` | `create`、`join`、`leave`、`fixed_join`、`weekly_join`、`fixed_cancel`、`weekly_cancel`、`update`、`handoff`、`delete`、`comment`、`admin_remove_attendee` |
 | `action` | 可閱讀的操作說明 |
 | `details` | 補充 JSON 資料 |
 
 ## 同步與權限規則
 
-- `saveEvent`：建立或更新活動；既有活動只有目前主揪或已驗證管理員可修改。
+- `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
+- `addComment`：在活動紀錄新增一則留言，任何已登入成員都可以。內容由 GAS 重新組裝並限制 150 字，不採用前端送來的 history 條目。
 - 編輯活動時，GAS 只更新活動內容並保留雲端最新報名名單，避免舊分頁覆蓋新報名。
 - `toggleRSVP`：使用明確的 `join`／`cancel`，不再用模糊的切換操作。
 - 固定團的 `toggleRSVP` 會另外接收 `participationType = fixed` 或 `weekly`；兩種參與方式互斥。

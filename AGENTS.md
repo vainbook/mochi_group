@@ -56,8 +56,19 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 
 ## 權限模型
 
-- 主揪可編輯與刪除自己的活動。
-- 管理員模式啟用後，可編輯與刪除任何活動，包含名稱、時間、地點、費用、人數上限、說明與主揪交棒。
+權限分成三級，不可混為一談：
+
+| 動作 | 主揪 | 管理員 | 已報名成員 | 未報名者 |
+|---|---|---|---|---|
+| 編輯內容（名稱／時間／地點／費用／人數／說明） | ✓ | ✓ | **✓** | ✗ |
+| 交棒主揪 | ✓ | ✓ | ✗ | ✗ |
+| 刪除活動 | ✓ | ✓ | ✗ | ✗ |
+| 移除成員 | ✓ | ✓ | ✗ | ✗ |
+| 活動留言 | ✓ | ✓ | ✓ | ✓ |
+
+- 已報名成員可共同維護活動細節，這是刻意開放的。GAS 用 `assertEditPermission_()`（含 `isEventAttendee_()`）驗證。
+- **交棒必須用 `assertHandoffPermission_()`，不可沿用 `assertEditPermission_()`** —— 否則任何報名者都能把自己設成主揪。前端也要同步用 `canCurrentUserHandoffHost()` 鎖住主揪下拉選單。
+- 留言不限已報名者，任何已登入成員都可以留言。
 - 管理員入口隱藏在頁首版本號上：點擊 `.version-label` 開啟／退出管理員模式，仍必須輸入密碼。不得改回顯眼的「管理員模式」按鈕。
 - 管理員密碼只能在 `saveEvent` 與 `deleteEvent` 等需要權限的請求中透過 HTTPS 傳給 GAS，不得寫進 localStorage、活動紀錄或 AuditLog。重新載入後要自動退出管理員模式。
 - 權限變更必須同時修改前端的按鈕顯示／送出 payload，以及 GAS 的 `assert...Permission_` 驗證；只修改一邊不算完成。
@@ -88,6 +99,14 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - `maps.app.goo.gl` 短網址必須透過 GAS `resolveMapLocation` 解析；前端不能依賴跨網域 redirect fetch。
 - GAS 只能追蹤允許的 Google Maps 網域，不可放寬成任意 URL，避免 SSRF。
 - 沒有可解析文字時才回退顯示「Google 地圖位置」。
+
+### 活動留言
+
+- 留言透過 GAS `addComment` action 寫入，會成為活動 `history` 的一筆 `type: "comment"` 紀錄，顯示在活動紀錄中並與系統紀錄有視覺區隔。
+- 留言內容由 GAS 重新組裝，**不直接採用前端送來的 `historyEntry`**，避免前端塞入任意 `action` 文字冒充系統紀錄。
+- 長度上限 `MAX_COMMENT_LENGTH`（150 字），前後端都要驗證。空白留言一律擋下。
+- 留言計入 `MAX_EVENT_HISTORY`（50 筆）上限。調高上限會等比放大每次同步的傳輸量，改動前先估算。
+- 卡片上的「活動留言」按鈕取代了原本的「加到行事曆」。固定團也顯示留言按鈕。
 
 ### Google 日曆
 

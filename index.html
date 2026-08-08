@@ -1018,6 +1018,33 @@
       color: var(--line-green-dark);
     }
 
+    /* 留言與系統紀錄視覺區隔 */
+    .history-comment {
+      background: #f0fdf4;
+      border-left: 3px solid var(--line-green);
+      border-radius: 0 8px 8px 0;
+      padding: 8px 10px;
+      margin: 4px 0;
+      border-bottom: none;
+    }
+
+    .history-comment-text {
+      margin-top: 3px;
+      color: #0f172a;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .comment-event-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #0f172a;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
     /* Alert Textbox */
     .alert-text-box {
       background: #f8fafc;
@@ -1071,7 +1098,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-08T01:12:45+08:00">v260808.0112</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-08T16:14:41+08:00">v260808.1614</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1148,6 +1175,31 @@
           訂閱後，之後新增或修改的活動都會自動出現在你的 Google 日曆。
           若按了訂閱卻看不到內容，代表這本日曆尚未開放給你，請找管理員設定共用權限。
         </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Comment (活動留言) -->
+  <div id="modal-comment" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-comment">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="title-comment" class="modal-title-text">活動留言</span>
+        <button class="modal-close" data-close="modal-comment" aria-label="關閉活動留言視窗">關閉</button>
+      </div>
+      <div class="modal-body">
+        <div id="comment-event-title" class="comment-event-title"></div>
+        <form id="form-comment">
+          <div class="form-group">
+            <label class="form-label" for="comment-text">留言內容</label>
+            <textarea id="comment-text" class="line-input" rows="3" maxlength="150"
+              placeholder="例如：我會晚 10 分鐘到、球場改到 3 號場"></textarea>
+            <div class="form-help"><span id="comment-count">0</span> / 150 字，留言會出現在活動紀錄中</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-comment">取消</button>
+            <button type="submit" class="line-btn btn-join" style="flex:1.5;">送出留言</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -1283,6 +1335,7 @@
             <label class="form-label" for="edit-host-user">主揪</label>
             <select id="edit-host-user" class="line-input" aria-describedby="edit-host-help"></select>
             <div id="edit-host-help" class="form-help">主揪若要退出活動，需要交棒給新主揪</div>
+            <div id="edit-host-hint" class="form-help" style="display:none; color:#94a3b8;">只有主揪或管理員可以更換主揪，其他欄位你都能編輯</div>
           </div>
           <div class="form-group">
             <label class="form-label" for="edit-desc">補充說明</label>
@@ -1431,7 +1484,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260808.0112", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260808.1614", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1644,7 +1697,21 @@
       return isCurrentUserHost(evt) || currentUserCanDeleteAnyEvent;
     }
 
+    // 已報名成員可共同編輯活動內容。
+    function isCurrentUserAttendee(evt) {
+      if (!isAuthVerified || !currentUser || !evt) return false;
+      return (evt.attendees || []).some(user =>
+        String(user.userId) === String(currentUser.userId)
+      );
+    }
+
     function canCurrentUserEditEvent(evt) {
+      return isCurrentUserHost(evt) || currentUserCanDeleteAnyEvent || isCurrentUserAttendee(evt);
+    }
+
+    // 交棒主揪與刪除活動仍限主揪／管理員，
+    // 否則任何報名者都能把自己設成主揪或刪掉別人的活動。
+    function canCurrentUserHandoffHost(evt) {
       return isCurrentUserHost(evt) || currentUserCanDeleteAnyEvent;
     }
 
@@ -2764,9 +2831,8 @@
           actionButtonsHtml = `<button class="line-btn btn-join rsvp-action">參加活動</button>`;
         }
 
-        const calendarHtml = fixedGroup
-          ? ""
-          : `<a class="line-btn btn-calendar" href="${generateGoogleCalendarUrl(evt)}" target="_blank" rel="noopener noreferrer">加到行事曆</a>`;
+        // 固定團也能留言，所以不分活動類型都顯示。
+        const commentHtml = `<button class="line-btn btn-calendar comment-action" type="button">活動留言</button>`;
 
         cardEl.innerHTML = `
           <!-- 1️⃣ 第一層：折疊單行標頭 -->
@@ -2801,7 +2867,7 @@
             <div class="card-actions ${fixedGroup ? "fixed-actions" : ""}">
               ${actionButtonsHtml}
               <button class="line-btn btn-detail detail-action">活動詳情</button>
-              ${calendarHtml}
+              ${commentHtml}
             </div>
 
             ${evt.attendees.length > 0 ? `
@@ -2833,6 +2899,8 @@
           button.onclick = () => toggleFixedParticipation(evt.id, button.dataset.participation);
         });
         cardEl.querySelector(".detail-action").onclick = () => openDetailModal(evt.id);
+        const commentButton = cardEl.querySelector(".comment-action");
+        if (commentButton) commentButton.onclick = () => openCommentModal(evt.id);
 
         listEl.appendChild(cardEl);
       });
@@ -3123,6 +3191,62 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(newEvent, "create");
     });
 
+    // --- 活動留言 ---
+    const MAX_COMMENT_LENGTH = 150;
+    let commentTargetEventId = null;
+
+    function openCommentModal(eventId) {
+      if (!ensureLoggedIn()) return;
+      const evt = eventsData.find(item => item.id === eventId);
+      if (!evt) return;
+
+      commentTargetEventId = eventId;
+      document.getElementById("comment-event-title").innerText = evt.title || "活動";
+      const input = document.getElementById("comment-text");
+      input.value = "";
+      document.getElementById("comment-count").innerText = "0";
+      openModal("modal-comment");
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function submitComment() {
+      if (!ensureLoggedIn()) return;
+      const evt = eventsData.find(item => item.id === commentTargetEventId);
+      if (!evt) return;
+
+      const input = document.getElementById("comment-text");
+      const text = input.value.trim();
+      if (!text) {
+        alert("請先輸入留言內容。");
+        return;
+      }
+      if (text.length > MAX_COMMENT_LENGTH) {
+        alert(`留言請控制在 ${MAX_COMMENT_LENGTH} 字以內。`);
+        return;
+      }
+
+      const snapshot = snapshotEventState(evt);
+      const entry = addHistoryLog(evt, text, "comment");
+      saveLocalEvents();
+      renderEvents();
+      closeModal("modal-comment");
+      if (isDetailModalOpen()) openDetailModal(evt.id);
+      showToast("留言已送出");
+
+      sendPostToGAS({
+        action: "addComment",
+        eventId: evt.id,
+        userId: currentUser.userId,
+        displayName: currentUser.displayName,
+        text: text,
+        historyEntry: entry
+      }).then(result => {
+        if (!result.ok) {
+          rollbackEventState(snapshot, `留言送出失敗，已還原。\n\n${result.message}`);
+        }
+      });
+    }
+
     // --- 活動日曆檢視 ---
     function buildCalendarEmbedUrl(calendarId) {
       const params = new URLSearchParams({
@@ -3179,22 +3303,6 @@ ${pageUrl}`;
       if (iframe) iframe.removeAttribute("src");
     }
 
-    // --- 14. GOOGLE CALENDAR GENERATOR ---
-    function generateGoogleCalendarUrl(evt) {
-      const startDt = parseSafeDate(evt.datetime);
-      const endDt = new Date(startDt.getTime() + 2 * 60 * 60 * 1000);
-
-      const formatGCalDate = (dt) => {
-        return dt.toISOString().replace(/-|:|\.\d\d\d/g, "");
-      };
-
-      const title = encodeURIComponent(`[活動] ${evt.title}`);
-      const details = encodeURIComponent(`主揪: ${evt.hostName || evt.hostUser?.displayName}\n費用: ${evt.fee}\n說明: ${evt.description}`);
-      const location = encodeURIComponent(normalizeLocation(evt.location));
-      const dates = `${formatGCalDate(startDt)}/${formatGCalDate(endDt)}`;
-
-      return `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
-    }
 
     function populateEditHostOptions(evt) {
       const select = document.getElementById("edit-host-user");
@@ -3217,7 +3325,14 @@ ${pageUrl}`;
       });
 
       select.value = hostUser?.userId ? String(hostUser.userId) : "";
-      select.disabled = memberMap.size <= 1;
+      // 一般報名者可以編輯內容，但不能交棒主揪。
+      const canHandoff = canCurrentUserHandoffHost(evt);
+      select.disabled = memberMap.size <= 1 || !canHandoff;
+
+      const hint = document.getElementById("edit-host-hint");
+      if (hint) {
+        hint.style.display = canHandoff ? "none" : "block";
+      }
     }
 
     // --- 15. EDIT EVENT SUBMISSION LOGIC ---
@@ -3229,7 +3344,7 @@ ${pageUrl}`;
       const evt = eventsData.find(e => e.id === activeEventId);
       if (!evt) return;
       if (!canCurrentUserEditEvent(evt)) {
-        alert("只有目前主揪或管理員可以編輯內容！");
+        alert("報名這個活動之後就可以編輯內容！");
         closeModal("modal-edit");
         return;
       }
@@ -3258,6 +3373,10 @@ ${pageUrl}`;
         return;
       }
       const hostChanged = String(currentHost?.userId || "") !== selectedHostId;
+      if (hostChanged && !canCurrentUserHandoffHost(evt)) {
+        alert("只有主揪或管理員可以更換主揪。");
+        return;
+      }
 
       const contentChanges = [];
       if (evt.title !== newTitle) contentChanges.push(`名稱改為「${newTitle}」`);
@@ -3395,17 +3514,22 @@ ${pageUrl}`;
       if (!evt.history || evt.history.length === 0) {
         historyEl.innerHTML = `<div style="color:#94a3b8; font-size:12px;">尚無活動紀錄</div>`;
       } else {
-        historyEl.innerHTML = evt.history.map(log => `
-          <div class="history-item">
-            <span class="history-meta">${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>：${escapeHtml(log.action)}
+        historyEl.innerHTML = evt.history.map(log => {
+          const isComment = String(log.type || "") === "comment";
+          return `
+          <div class="history-item${isComment ? " history-comment" : ""}">
+            <span class="history-meta">${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>${isComment ? "" : "："}${isComment
+              ? `<div class="history-comment-text">${escapeHtml(log.action)}</div>`
+              : escapeHtml(log.action)}
           </div>
-        `).join("");
+        `;
+        }).join("");
       }
 
       editBtn.onclick = () => {
         if (!ensureLoggedIn()) return;
         if (!canCurrentUserEditEvent(evt)) {
-          alert("只有目前主揪或管理員可以編輯內容！");
+          alert("報名這個活動之後就可以編輯內容！");
           return;
         }
         closeModal("modal-detail");
@@ -3589,6 +3713,14 @@ ${memberDetails}
       };
 
       document.getElementById("btn-open-calendar").onclick = openCalendarModal;
+
+      document.getElementById("form-comment").addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitComment();
+      });
+      document.getElementById("comment-text").addEventListener("input", (e) => {
+        document.getElementById("comment-count").innerText = String(e.target.value.length);
+      });
 
       document.getElementById("btn-broadcast-all").onclick = () => {
         broadcastOpenEvents();

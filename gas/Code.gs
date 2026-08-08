@@ -64,8 +64,9 @@ const APP_CONFIG = Object.freeze({
   ARCHIVE_SHEET: "EventsArchive",
   AUDIT_SHEET: "AuditLog",
   // 活動列只保留最近的操作紀錄，避免長期固定團無上限膨脹。
-  // AuditLog 仍保存完整紀錄。
-  MAX_EVENT_HISTORY: 30,
+  // AuditLog 仍保存完整紀錄。留言也計入這個上限。
+  MAX_EVENT_HISTORY: 50,
+  MAX_COMMENT_LENGTH: 150,
   // 活動結束後多久才視為過期並移出前端資料。
   // 給 2 小時緩衝，活動進行中仍看得到。
   EVENT_GRACE_MS: 2 * 60 * 60 * 1000,
@@ -491,6 +492,9 @@ function doPost(e) {
       case "adminRemoveAttendee":
         result = adminRemoveAttendee_(eventsSheet, auditSheet, payload);
         break;
+      case "addComment":
+        result = addComment_(eventsSheet, auditSheet, payload);
+        break;
       default:
         throw new Error("不支援的 action：" + String(payload.action || "空白"));
     }
@@ -626,6 +630,8 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
     normalizedEvent.history = mergeHistoryLists_(existingEvent.history, payload.history);
 
     if (eventAction === "handoff") {
+      // 交棒是主揪／管理員限定，一般報名者只能改內容。
+      assertHandoffPermission_(existingEvent, payload);
       const newHostUserId = getHostUserId_(normalizedEvent);
       const isRegistered = normalizedEvent.attendees.some(user =>
         String(user.userId) === String(newHostUserId)
@@ -758,6 +764,51 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
     attendees: eventItem.attendees,
     history: eventItem.history
   };
+}
+
+/**
+ * 在活動紀錄中新增一則留言。任何已登入成員都可以留言，不限已報名者。
+ * 留言內容由 GAS 重新組裝，不直接採用前端送來的 history 條目，
+ * 避免前端塞入任意的 action 文字冒充系統紀錄。
+ */
+function addComment_(eventsSheet, auditSheet, payload) {
+  const eventId = requireText_(payload.eventId, "缺少 eventId");
+  const userId = requireText_(payload.userId, "缺少 userId");
+  const text = String(payload.text || "").replace(/\s+$/g, "").trim();
+
+  if (!text) throw new Error("留言內容不可空白。");
+  if (text.length > APP_CONFIG.MAX_COMMENT_LENGTH) {
+    throw new Error("留言請控制在 " + APP_CONFIG.MAX_COMMENT_LENGTH + " 字以內。");
+  }
+
+  const found = requireEvent_(eventsSheet, eventId);
+  const eventItem = found.event;
+  assertActiveEvent_(eventItem);
+
+  const sourceEntry = payload.historyEntry || {};
+  const entry = {
+    id: String(sourceEntry.id || ("log_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8))),
+    author: String(payload.displayName || payload.actorName || "未命名成員"),
+    authorUserId: userId,
+    time: String(sourceEntry.time || ""),
+    timestamp: new Date().toISOString(),
+    action: text,
+    type: "comment"
+  };
+
+  eventItem.history = mergeHistoryEntries_(eventItem.history, entry);
+  eventItem.updatedAt = new Date().toISOString();
+  eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+  writeEvent_(eventsSheet, found.rowNumber, eventItem);
+
+  appendAudit_(auditSheet, payload, {
+    eventId: eventId,
+    actionType: "comment",
+    action: "留言：" + text,
+    details: { commentLength: text.length }
+  });
+
+  return { eventId: eventId, history: eventItem.history, entry: entry };
 }
 
 function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
@@ -1275,7 +1326,30 @@ function assertDeletePermission_(eventItem, payload) {
   assertHostPermission_(eventItem, actorUserId);
 }
 
+function isEventAttendee_(eventItem, actorUserId) {
+  const userId = String(actorUserId || "");
+  if (!userId) return false;
+  return normalizeUsers_((eventItem && eventItem.attendees) || [])
+    .some(user => String(user.userId) === userId);
+}
+
+/**
+ * 編輯活動內容：主揪、管理員，或任何已報名的成員都可以。
+ * 報名者共同維護活動細節（改地點、改時間、補說明）是刻意開放的。
+ */
 function assertEditPermission_(eventItem, payload) {
+  const actorUserId = String(payload.actorUserId || "");
+  if (verifyAdminPassword_(payload.adminPassword)) return;
+  if (actorUserId && String(getHostUserId_(eventItem)) === actorUserId) return;
+  if (isEventAttendee_(eventItem, actorUserId)) return;
+  throw new Error("只有已報名的成員、主揪或管理員可以編輯活動內容。");
+}
+
+/**
+ * 交棒主揪只有主揪與管理員可以執行。
+ * 不可沿用 assertEditPermission_，否則任何報名者都能把自己設成主揪。
+ */
+function assertHandoffPermission_(eventItem, payload) {
   const actorUserId = String(payload.actorUserId || "");
   if (verifyAdminPassword_(payload.adminPassword)) return;
   assertHostPermission_(eventItem, actorUserId);
