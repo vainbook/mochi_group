@@ -1071,7 +1071,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-08T00:17:39+08:00">v260808.0017</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-08T01:12:45+08:00">v260808.0112</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1096,11 +1096,6 @@
     <nav class="nav-filters">
       <button class="tab-btn active" data-filter="open">揪團中</button>
       <button class="tab-btn" data-filter="fixed">固定團</button>
-      <button class="tab-btn" data-filter="ended">已過期</button>
-      
-      <button id="btn-export-ended" class="export-btn" style="display: none;">
-        匯出歷史紀錄
-      </button>
       <button id="btn-refresh-data" class="refresh-btn" type="button">重新整理</button>
     </nav>
 
@@ -1436,7 +1431,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260808.0017", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260808.0112", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1599,8 +1594,15 @@
       return evt;
     }
 
+    // 與 GAS 的 EVENT_GRACE_MS 一致：結束後 2 小時才算過期，
+    // 活動進行中仍看得到。固定團永遠不會過期。
+    const EVENT_GRACE_MS = 2 * 60 * 60 * 1000;
+
     function isEventEnded(evt) {
-      return !isFixedGroup(evt) && parseSafeDate(evt.datetime) < new Date();
+      if (isFixedGroup(evt)) return false;
+      const start = parseSafeDate(evt.datetime);
+      if (isNaN(start.getTime())) return false;
+      return start.getTime() + EVENT_GRACE_MS < Date.now();
     }
 
     function getEventTimeText(evt) {
@@ -2675,13 +2677,6 @@
       const listEl = document.getElementById("event-list");
       listEl.innerHTML = "";
 
-      const exportBtn = document.getElementById("btn-export-ended");
-      if (currentFilter === "ended") {
-        exportBtn.style.display = "block";
-      } else {
-        exportBtn.style.display = "none";
-      }
-
       const sortedEvents = eventsData
         .filter(evt => !isEventDeleted(evt))
         .sort((a, b) => {
@@ -2690,19 +2685,11 @@
           return parseSafeDate(a.datetime) - parseSafeDate(b.datetime);
         });
       
+      // 過期活動由 GAS 過濾並歸檔，前端不再有「已過期」分頁。
+      // 這裡仍擋一次，避免活動剛好在兩次同步之間結束。
       const filteredEvents = sortedEvents.filter(evt => {
-        const isEnded = isEventEnded(evt);
-
-        if (currentFilter === "open") {
-          return !isEnded;
-        }
-        if (currentFilter === "fixed") {
-          return isFixedGroup(evt);
-        }
-        if (currentFilter === "ended") {
-          return isEnded;
-        }
-        return true;
+        if (currentFilter === "fixed") return isFixedGroup(evt);
+        return !isEventEnded(evt);
       });
 
       if (filteredEvents.length === 0) {
@@ -2895,29 +2882,6 @@ ${pageUrl}`;
     }
 
     // --- 10. EXPORT ENDED EVENTS FUNCTION ---
-    function exportEndedEvents() {
-      const endedEvents = eventsData
-        .filter(evt => isEventEnded(evt))
-        .sort((a, b) => parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
-
-      if (endedEvents.length === 0) {
-        alert("目前沒有已過期的活動！");
-        return;
-      }
-
-      const exportLines = endedEvents.map(evt => {
-        const dt = parseSafeDate(evt.datetime);
-        const yyyy = dt.getFullYear();
-        const mm = String(dt.getMonth() + 1).padStart(2, '0');
-        const dd = String(dt.getDate()).padStart(2, '0');
-        return `[${yyyy}-${mm}-${dd}] ${evt.title} (${normalizeLocation(evt.location)})`;
-      });
-
-      const exportText = `【已過期活動歷史紀錄】\n` + exportLines.join("\n");
-
-      safeCopyText(exportText);
-      showToast("📋 已複製過期紀錄，請分享到群組！");
-    }
 
     // --- 11. RSVP TOGGLE & COPIED NOTIFICATION ---
     function toggleRSVP(eventId) {
@@ -3649,9 +3613,6 @@ ${memberDetails}
       }
       document.getElementById("form-admin-mode").addEventListener("submit", submitAdminModePassword);
 
-      document.getElementById("btn-export-ended").onclick = () => {
-        exportEndedEvents();
-      };
 
       document.getElementById("btn-refresh-data").onclick = () => {
         refreshDataFromCloud();

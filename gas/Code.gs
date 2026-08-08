@@ -61,7 +61,14 @@
 
 const APP_CONFIG = Object.freeze({
   EVENTS_SHEET: "Events",
+  ARCHIVE_SHEET: "EventsArchive",
   AUDIT_SHEET: "AuditLog",
+  // 活動列只保留最近的操作紀錄，避免長期固定團無上限膨脹。
+  // AuditLog 仍保存完整紀錄。
+  MAX_EVENT_HISTORY: 30,
+  // 活動結束後多久才視為過期並移出前端資料。
+  // 給 2 小時緩衝，活動進行中仍看得到。
+  EVENT_GRACE_MS: 2 * 60 * 60 * 1000,
   STATUS_ACTIVE: "active",
   STATUS_DELETED: "deleted",
   ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
@@ -125,6 +132,7 @@ function onOpen() {
     .addItem("設定 Google 日曆", "setGoogleCalendar")
     .addItem("同步現有未過期活動", "syncAllExistingEventsToCalendar")
     .addItem("日曆診斷", "checkCalendarStatus")
+    .addItem("立即歸檔過期活動", "archiveRetiredEventsFromMenu")
     .addItem("設定管理員密碼", "setAdminPassword")
     .addItem("顯示表格設計", "showSchemaInfo")
     .addToUi();
@@ -378,6 +386,8 @@ function setupProject() {
     ensureHeaders_(auditSheet, AUDIT_HEADERS);
     formatEventsSheet_(eventsSheet);
     formatAuditSheet_(auditSheet);
+    getOrCreateArchiveSheet_(spreadsheet, EVENT_HEADERS.slice());
+    installArchiveTrigger_();
 
     PropertiesService.getScriptProperties().setProperties({
       SPREADSHEET_ID: spreadsheet.getId(),
@@ -386,7 +396,8 @@ function setupProject() {
     SpreadsheetApp.flush();
     return {
       status: "success",
-      message: "Events 與 AuditLog 已完成初始化，表格結構版本為 " + APP_CONFIG.SCHEMA_VERSION + "。"
+      message: "Events、EventsArchive 與 AuditLog 已完成初始化，表格結構版本為 " +
+        APP_CONFIG.SCHEMA_VERSION + "。已建立每日自動歸檔觸發器。"
     };
   } finally {
     lock.releaseLock();
@@ -408,10 +419,11 @@ function showSchemaInfo() {
 function doGet(e) {
   try {
     const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
-    const includeDeleted = String((e && e.parameter && e.parameter.includeDeleted) || "") === "1";
     const schemaReady = hasRequiredHeaders_(eventsSheet, EVENT_HEADERS);
+    // 只回傳仍需顯示的活動。已過期與已刪除一律不送，
+    // 避免資料量隨時間無限累積，也不再對外公開已刪除活動的名單。
     const events = readAllEvents_(eventsSheet)
-      .filter(eventItem => includeDeleted || !isDeletedEvent_(eventItem));
+      .filter(eventItem => !isRetiredEvent_(eventItem));
 
     return jsonOutput_({
       status: "success",
@@ -1129,7 +1141,7 @@ function normalizeEvent_(payload, existingEvent) {
     attendees: normalizeUsers_(source.attendees),
     fixedAttendees: normalizeUsers_(source.fixedAttendees),
     weeklyAttendees: normalizeUsers_(source.weeklyAttendees),
-    history: Array.isArray(source.history) ? source.history : [],
+    history: trimEventHistory_(source.history),
     calendarEventId: String(source.calendarEventId || ""),
     createdAt: String(source.createdAt || ""),
     updatedAt: String(source.updatedAt || ""),
@@ -1161,22 +1173,35 @@ function normalizeUser_(user) {
   };
 }
 
+/**
+ * 活動列的 history 只保留最近 MAX_EVENT_HISTORY 筆（新的在前）。
+ * 沒有這道上限，長期固定團的單一列會無上限成長，
+ * 而它永遠不會過期、也就永遠不會被歸檔移走。
+ * 完整紀錄仍保存在 AuditLog。
+ */
+function trimEventHistory_(history) {
+  const list = Array.isArray(history) ? history : parseJsonField_(history, []);
+  return list.length > APP_CONFIG.MAX_EVENT_HISTORY
+    ? list.slice(0, APP_CONFIG.MAX_EVENT_HISTORY)
+    : list;
+}
+
 function mergeHistoryEntries_(history, entry) {
   const list = Array.isArray(history) ? history.slice() : parseJsonField_(history, []);
-  if (!entry || !entry.action) return list;
+  if (!entry || !entry.action) return trimEventHistory_(list);
   const entryKey = String(entry.id || "") || [entry.author, entry.time, entry.action].join("|");
   const exists = list.some(item => {
     const itemKey = String(item.id || "") || [item.author, item.time, item.action].join("|");
     return itemKey === entryKey;
   });
   if (!exists) list.unshift(entry);
-  return list;
+  return trimEventHistory_(list);
 }
 
 function mergeHistoryLists_(currentHistory, incomingHistory) {
   const current = Array.isArray(currentHistory) ? currentHistory : parseJsonField_(currentHistory, []);
   const incoming = Array.isArray(incomingHistory) ? incomingHistory : parseJsonField_(incomingHistory, []);
-  return incoming.concat(current).reduce((merged, entry) => {
+  return trimEventHistory_(incoming.concat(current).reduce((merged, entry) => {
     if (!entry || !entry.action) return merged;
     const entryKey = String(entry.id || "") || [entry.author, entry.time, entry.action].join("|");
     const exists = merged.some(item => {
@@ -1185,7 +1210,7 @@ function mergeHistoryLists_(currentHistory, incomingHistory) {
     });
     if (!exists) merged.push(entry);
     return merged;
-  }, []);
+  }, []));
 }
 
 function getChangedFields_(previousEvent, nextEvent) {
@@ -1436,6 +1461,107 @@ function isCalendarEventLive_(calendar, calendarEvent) {
   } catch (error) {
     return false;
   }
+}
+
+/**
+ * 判斷活動是否已「退場」：已刪除，或結束超過緩衝時間。
+ * 固定團沒有結束時間，永遠不會退場。
+ * 時間無法解析的活動一律保留，避免格式問題造成資料被誤搬。
+ */
+function isRetiredEvent_(eventItem) {
+  if (!eventItem) return false;
+  if (isDeletedEvent_(eventItem)) return true;
+  if (eventItem.isFixedGroup === true) return false;
+
+  const startTime = parseCalendarStartTime_(eventItem.datetime);
+  if (!startTime) return false;
+  return startTime.getTime() + APP_CONFIG.EVENT_GRACE_MS < Date.now();
+}
+
+/**
+ * 將已退場的活動搬到歸檔工作表，並從 Events 移除該列。
+ * 由每日觸發器自動執行，也可從選單手動執行。
+ * 回傳搬移筆數，不觸碰 UI，以便在觸發器環境下執行。
+ */
+function archiveRetiredEvents() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
+  try {
+    const spreadsheet = getSpreadsheet_();
+    const eventsSheet = spreadsheet.getSheetByName(APP_CONFIG.EVENTS_SHEET);
+    if (!eventsSheet || eventsSheet.getLastRow() < 2) return { moved: 0, remaining: 0 };
+
+    const headers = eventsSheet.getRange(1, 1, 1, eventsSheet.getLastColumn()).getDisplayValues()[0];
+    const rows = eventsSheet.getRange(2, 1, eventsSheet.getLastRow() - 1, headers.length).getValues();
+
+    const retiredRows = [];
+    const retiredRowNumbers = [];
+    rows.forEach((row, index) => {
+      const eventItem = rowToEvent_(headers, row);
+      if (!eventItem.id || !isRetiredEvent_(eventItem)) return;
+      retiredRows.push(row);
+      retiredRowNumbers.push(index + 2);
+    });
+
+    if (retiredRows.length === 0) {
+      return { moved: 0, remaining: Math.max(eventsSheet.getLastRow() - 1, 0) };
+    }
+
+    const archiveSheet = getOrCreateArchiveSheet_(spreadsheet, headers);
+    archiveSheet
+      .getRange(archiveSheet.getLastRow() + 1, 1, retiredRows.length, headers.length)
+      .setValues(retiredRows);
+
+    // 由下往上刪，避免刪除後列號位移。
+    retiredRowNumbers.slice().reverse().forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
+
+    SpreadsheetApp.flush();
+    return { moved: retiredRows.length, remaining: Math.max(eventsSheet.getLastRow() - 1, 0) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getOrCreateArchiveSheet_(spreadsheet, headers) {
+  let sheet = spreadsheet.getSheetByName(APP_CONFIG.ARCHIVE_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(APP_CONFIG.ARCHIVE_SHEET);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    formatHeader_(sheet, headers.length, "#94a3b8");
+    return sheet;
+  }
+  if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    formatHeader_(sheet, headers.length, "#94a3b8");
+  }
+  return sheet;
+}
+
+/**
+ * 建立每日歸檔觸發器，重複執行不會產生多個觸發器。
+ */
+function installArchiveTrigger_() {
+  ScriptApp.getProjectTriggers()
+    .filter(trigger => trigger.getHandlerFunction() === "archiveRetiredEvents")
+    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+
+  ScriptApp.newTrigger("archiveRetiredEvents")
+    .timeBased()
+    .everyDays(1)
+    .atHour(4)
+    .create();
+}
+
+function archiveRetiredEventsFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const result = archiveRetiredEvents();
+  ui.alert(
+    "歸檔完成",
+    "已搬移 " + result.moved + " 筆到「" + APP_CONFIG.ARCHIVE_SHEET + "」。\n" +
+    "Events 目前剩下 " + result.remaining + " 筆。\n\n" +
+    "搬移對象：已刪除的活動，以及結束超過 2 小時的一般活動。固定團不會被搬移。",
+    ui.ButtonSet.OK
+  );
 }
 
 function shouldSyncCalendarEvent_(eventItem) {

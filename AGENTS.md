@@ -4,10 +4,12 @@
 
 ## 專案結構
 
-- `index.html`：單檔前端，包含 HTML、CSS 與所有瀏覽器 JavaScript。
+- `index.html`：單檔前端，包含 HTML、CSS 與所有瀏覽器 JavaScript（約 3600 行，JS 2200 行、89 個函式）。已接近單檔可維護的上限，新增大型功能前先評估是否要拆檔。
 - `version.json`：GitHub Pages 自動更新檢查用的版本清單。
-- `gas/Code.gs`：Google Apps Script 後端，處理 Sheet 讀寫、權限、地圖短網址與操作紀錄。
-- `gas/README.md`：GAS 表格欄位、安裝、部署與驗證說明。
+- `gas/Code.gs`：Google Apps Script 後端，處理 Sheet 讀寫、權限、地圖短網址、Google 日曆同步、歸檔與操作紀錄。
+- `gas/README.md`：GAS 表格欄位、安裝、部署、日曆與歸檔說明。
+
+Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`EventsArchive`（已退場活動，平常不讀取）、`AuditLog`（永久操作紀錄）。
 
 ## 資料與隱私邊界
 
@@ -25,7 +27,9 @@
 
 若使用「新增部署」而產生新 `/exec` 網址，必須同步更新 `index.html` 的 `CONFIG.GAS_API_URL`。優先編輯原部署並選「新版本」，以保持網址不變。
 
-線上 `/exec` 的當前結構應回傳最外層 `"schemaVersion":"2"`。個別舊活動的 `schemaVersion:1` 只代表建立於舊版，不代表整張 Sheet 仍是舊結構。
+線上 `/exec` 的當前結構應回傳最外層 `"schemaVersion":"3"`，並包含 `calendar` 欄位。個別舊活動的 `schemaVersion:1` 只代表建立於舊版，不代表整張 Sheet 仍是舊結構。
+
+判斷「部署到底更新了沒」時，注意 Sheet 選單功能（設定日曆、歸檔、診斷）跑的是**編輯器裡儲存的程式碼**，不需要部署；只有 `/exec`（LINE 網頁連的端點）用的是部署版本。兩者可能不同步，這是最常見的排查陷阱。
 
 ## 版本與發布規則
 
@@ -42,11 +46,11 @@
 
 ## Google Sheet 與 GAS 規則
 
-- `setupProject()` 負責新增／修復 `Events` 與 `AuditLog` 表格及欄位。只在 schema 改變或尚未初始化時要求使用者執行。
-- `onOpen()` 在電腦版 Google Sheet 頂部建立「活動布告欄」自訂選單，不是底部工作表分頁。手機版 Sheets 可能不顯示自訂選單。
+- `setupProject()` 負責新增／修復 `Events`、`EventsArchive` 與 `AuditLog` 表格及欄位，並註冊每日歸檔觸發器。只在 schema 改變或尚未初始化時要求使用者執行。
+- `onOpen()` 在電腦版 Google Sheet 頂部建立「活動布告欄」自訂選單，不是底部工作表分頁。手機版 Sheets 可能不顯示自訂選單。選單中結尾為底線的私有函式不會出現在編輯器的執行下拉選單，要驗證程式碼版本請直接搜尋原始碼字串。
 - `setAdminPassword()` 只保存加鹽 SHA-256 雜湊到 Script Properties，密碼不得出現在 Sheet 或程式碼。
 - 寫入操作必須保留 Script Lock 與 `mutationId` 幂等檢查，避免手機與電腦同時操作重複寫入。
-- 刪除活動必須維持 soft delete：設為 `status = deleted`並寫入 `deletedAt`、`deletedBy`、`deletedByUserId`，不可刪除 Sheet 列。
+- 刪除活動必須維持 soft delete：`deleteEvent` 只設 `status = deleted` 並寫入 `deletedAt`、`deletedBy`、`deletedByUserId`，**不可在請求處理中刪除 Sheet 列**。列的移除只由每日歸檔流程執行，且必須先複製到 `EventsArchive` 才刪除，刪列時要由下往上避免列號位移。
 - `AuditLog` 與活動 `history` 必須記錄建立、編輯、報名、退出、交棒與刪除。
 - GAS 是多人同步的最終資料來源。不得讓舊前端快照覆蓋 GAS 中較新的參與名單。
 
@@ -72,9 +76,10 @@
 
 - schema 版本低於 2 時，顯示但停用「固定團（需更新）」，不可允許寫入缺欄位的舊表格。
 - 固定團使用 `isFixedGroup`、`fixedTimeText`、`fixedAttendees`、`weeklyAttendees`。
-- 固定團在列表置頂，並位於「揪團中」與「已過期」之間的獨立分頁。
+- 固定團在列表置頂，並有「固定團」獨立分頁。分頁只有「揪團中」與「固定團」兩個。
 - 參與方式為「固定參與」或「本週參與」，兩者互斥。固定團不顯示加到行事曆。
 - 固定團主揪必須維持固定參與，要退出一樣必須先交棒。
+- 固定團沒有結束時間，**永遠不會過期、不會被歸檔、也不會同步到 Google 日曆**。它是唯一會長期停留在 `Events` 的資料，因此 `history` 上限對它特別重要。
 
 ### 地點
 
@@ -83,6 +88,30 @@
 - `maps.app.goo.gl` 短網址必須透過 GAS `resolveMapLocation` 解析；前端不能依賴跨網域 redirect fetch。
 - GAS 只能追蹤允許的 Google Maps 網域，不可放寬成任意 URL，避免 SSRF。
 - 沒有可解析文字時才回退顯示「Google 地圖位置」。
+
+### Google 日曆
+
+- 日曆 ID 只存在 Script Properties 的 `GOOGLE_CALENDAR_ID`／`GOOGLE_CALENDAR_NAME`，**不得寫進 `Code.gs`、`index.html` 或 GitHub**。前端透過 `doGet` 的 `calendar` 欄位取得。
+- 同步只在「儲存活動」與「刪除活動」時觸發，報名／退出一律不碰日曆。這是刻意的，不要為了即時性把同步加回 RSVP 流程。
+- 只同步活動名稱、時間與地點。**不得寫入說明、費用、主揪或參與名單** —— 曾經有版本把成員名單寫進行程說明欄，那會讓所有看得到日曆的人取得名單。
+- `calendarEventId` 完全由 GAS 產生與保管，`saveEvent_` 一律忽略前端送來的值。否則舊分頁快照的空字串會清掉連結，下次儲存就重複建立行程並留下孤兒。
+- 取回既有行程後必須用 `isCalendarEventLive_()` 確認它還存在。`getEventById` 對**已刪除**的行程仍會回傳物件，而對已取消的行程呼叫 `setTitle`／`setTime` 不會讓它重新出現 —— 少了這道檢查，同步會回報成功但日曆完全沒有變化。
+- `setGoogleCalendar` 必須實際試寫一筆再刪除來驗證權限。唯讀訂閱的日曆一樣讀得到名稱，只檢查 `getCalendarById` 會讓設定看似成功、之後每次同步卻靜默失敗。
+- 已過期活動的行程保留為歷史，不再修改也不隨網頁刪除而移除。
+- 前端「日曆」按鈕位於 FAB 群組最上方（日曆 → 宣傳 → 揪團），開啟嵌入式日曆與訂閱連結，關閉時要卸載 iframe。
+- 時間解析依賴 Apps Script 專案時區為 `Asia/Taipei`。設錯會讓所有行程整批偏移。
+
+## 資料量控制
+
+系統中不得存在任何會無限成長的資料。以下三道機制必須同時保留：
+
+- 活動列的 `history` 上限為 `APP_CONFIG.MAX_EVENT_HISTORY`（30 筆），由 `trimEventHistory_()` 強制。固定團永遠不會過期也不會被歸檔，沒有這道上限它會無限膨脹。完整紀錄保存在 `AuditLog`。
+- `doGet` 只回傳仍需顯示的活動，已刪除與已過期一律不送（`isRetiredEvent_()`）。不得恢復 `includeDeleted` 參數，那會讓任何拿到 `/exec` 網址的人取得已刪除活動的成員名單。
+- 已刪除與過期活動由每日觸發器 `archiveRetiredEvents()` 搬到 `EventsArchive`，並從 `Events` 移除該列。固定團與時間無法解析的活動一律不搬。
+
+過期定義為活動開始時間加 `EVENT_GRACE_MS`（2 小時），前後端必須一致，活動進行中仍要看得到。
+
+「已過期」分頁與匯出歷史紀錄功能已刻意移除，不要重新加回。歸檔資料只在 Sheet 內查看。
 
 ## 同步、更新與快取
 
@@ -106,16 +135,21 @@
 
 1. 擷取 `index.html` 內嵌 script 並以 JavaScript parser／`new Function` 檢查語法。
 2. 以 JavaScript parser／`new Function` 檢查 `gas/Code.gs` 語法。
-3. 執行 `git diff --check`。
-4. 檢查三處前端版本一致。
-5. 權限修改要測試：主揪允許、管理員允許、一般非主揪成員拒絕。
-6. 同步修改要測試重複 `mutationId`、快速連點、較舊回應不覆蓋新狀態。
-7. 使用手機寬度檢查按鈕尺寸、表單捲動與 LINE 內建瀏覽器可操作性。
-8. 若可連線診斷 GAS，先做唯讀 GET；POST 只測試不寫入資料的功能，例如錯誤管理員密碼或地圖解析。不得用正式活動做刪除或編輯測試。
+3. **掃描是否呼叫了未定義的函式**：比對所有 `name(` 呼叫與已定義的 `function name`／`const name =`。語法檢查抓不到這種錯，但它會在執行時中斷整個函式 —— 曾經有一次 `openEventDetailModal()` 根本不存在，導致管理員移除成員的請求從未送出，畫面卻顯示成功。
+4. 執行 `git diff --check`。
+5. 檢查三處前端版本一致。
+6. 權限修改要測試：主揪允許、管理員允許、一般非主揪成員拒絕。
+7. 同步修改要測試重複 `mutationId`、快速連點、較舊回應不覆蓋新狀態。
+8. 寫入流程修改要確認每個 `sendPostToGAS` 呼叫點都處理了失敗並回滾。
+9. 使用手機寬度檢查按鈕尺寸、表單捲動與 LINE 內建瀏覽器可操作性。
+10. 若可連線診斷 GAS，先做唯讀 GET；POST 只測試不寫入資料的功能，例如錯誤管理員密碼或地圖解析。不得用正式活動做刪除或編輯測試。
+11. 純邏輯的 GAS 函式可從 `Code.gs` 抽出、以 stub 補上 `SpreadsheetApp`／`CalendarApp` 後在本機執行驗證，比只讀程式碼可靠得多。
 
 ## 常見故障判斷
 
-- 看到「固定團（需更新）」：先檢查網頁目前 `CONFIG.GAS_API_URL` 的 GET 回應最外層是否為 schema 2，再檢查前端是否同步成功。
+- 看到「固定團（需更新）」：先檢查網頁目前 `CONFIG.GAS_API_URL` 的 GET 回應最外層是否為 schema 3（前端門檻是 `>= 2`），再檢查前端是否同步成功。
+- 日曆完全沒有新增行程：依序確認 `GOOGLE_CALENDAR_ID` 是否存在、「設定 Google 日曆」是否顯示「寫入權限測試通過」、以及部署版本是否包含 `isCalendarEventLive_()`。若同步回報成功但日曆空白，通常是行程曾被手動刪除、而舊版程式碼對已取消的行程做了無效更新 —— 用「日曆診斷」看「連結已失效」的筆數即可確認。
+- 操作看似成功、重新整理後卻復原：代表 GAS 寫入失敗但前端沒有回滾。檢查該操作的 `sendPostToGAS` 呼叫點有沒有處理 `ok === false`，以及是否有未定義函式在送出前就中斷了流程。
 - 地點只顯示「Google 地圖位置」：測試 GAS 是否支援 `resolveMapLocation`；回覆「不支援的 action」表示前端已新、GAS 仍舊或網頁指向錯誤部署網址。
 - GitHub 程式碼已新但 GAS 功能仍舊：檢查 Apps Script 「管理部署作業」的網頁應用程式網址是否與 `CONFIG.GAS_API_URL` 相同。
 - 前端版本仍舊：先檢查 GitHub Pages `version.json`，再判斷是 Pages 尚未發布或 LINE WebView 快取，不要把兩者混為 GAS 同步問題。
