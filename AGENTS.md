@@ -86,10 +86,11 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 ### 固定團
 
 - schema 版本低於 2 時，顯示但停用「固定團（需更新）」，不可允許寫入缺欄位的舊表格。
-- 固定團使用 `isFixedGroup`、`fixedTimeText`、`fixedAttendees`、`weeklyAttendees`。
+- 固定團使用 `isFixedGroup` 與 `fixedTimeText`，時間是主揪手寫文字。
 - 固定團在列表置頂，並有「固定團」獨立分頁。分頁只有「揪團中」與「固定團」兩個。
-- 參與方式為「固定參與」或「本週參與」，兩者互斥。固定團不顯示加到行事曆。
-- 固定團主揪必須維持固定參與，要退出一樣必須先交棒。
+- **報名邏輯與一般活動完全相同**，共用單一 `attendees` 名單、共用 `toggleRSVP`。唯一差別是按鈕文字為「本週參與／本週取消」。
+- 主揪不可直接取消參與，要退出一樣必須先交棒 —— 與一般活動同一條規則。
+- `fixedAttendees`／`weeklyAttendees` 欄位已停用，只保留在表頭做舊資料相容。讀取時併回 `attendees`，寫入一律為空陣列。**不要重新啟用「固定參與／本週參與」兩段式名單** —— 它沒有每週重置機制，兩份名單行為完全相同，只是徒增複雜度而看不出差別。
 - 固定團沒有結束時間，**永遠不會過期、不會被歸檔、也不會同步到 Google 日曆**。它是唯一會長期停留在 `Events` 的資料，因此 `history` 上限對它特別重要。
 
 ### 地點
@@ -124,7 +125,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 
 系統中不得存在任何會無限成長的資料。以下三道機制必須同時保留：
 
-- 活動列的 `history` 上限為 `APP_CONFIG.MAX_EVENT_HISTORY`（30 筆），由 `trimEventHistory_()` 強制。固定團永遠不會過期也不會被歸檔，沒有這道上限它會無限膨脹。完整紀錄保存在 `AuditLog`。
+- 活動列的 `history` 上限為 `APP_CONFIG.MAX_EVENT_HISTORY`（50 筆，含留言），由 `trimEventHistory_()` 強制。固定團永遠不會過期也不會被歸檔，沒有這道上限它會無限膨脹。完整紀錄保存在 `AuditLog`。
 - `doGet` 只回傳仍需顯示的活動，已刪除與已過期一律不送（`isRetiredEvent_()`）。不得恢復 `includeDeleted` 參數，那會讓任何拿到 `/exec` 網址的人取得已刪除活動的成員名單。
 - 已刪除與過期活動由每日觸發器 `archiveRetiredEvents()` 搬到 `EventsArchive`，並從 `Events` 移除該列。固定團與時間無法解析的活動一律不搬。
 

@@ -74,8 +74,8 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `maxAttendees` | 人數上限，0 代表無限制 |
 | `description` | 補充說明 |
 | `attendees` | 已報名成員 JSON 陣列 |
-| `fixedAttendees` | 固定參與成員 JSON 陣列 |
-| `weeklyAttendees` | 本週參與成員 JSON 陣列 |
+| `fixedAttendees` | 已停用，保留供舊資料相容，一律寫入空陣列 |
+| `weeklyAttendees` | 已停用，保留供舊資料相容，一律寫入空陣列 |
 | `history` | 活動完整紀錄 JSON 陣列 |
 | `calendarEventId` | 對應的 Google Calendar Event ID，用於更新或刪除同一筆行程 |
 | `createdAt` | 建立時間 |
@@ -95,7 +95,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `timestamp` | 伺服器紀錄時間 |
 | `actorUserId` | 操作者 LINE userId |
 | `actorName` | 操作者名稱 |
-| `actionType` | `create`、`join`、`leave`、`fixed_join`、`weekly_join`、`fixed_cancel`、`weekly_cancel`、`update`、`handoff`、`delete`、`comment`、`admin_remove_attendee` |
+| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`admin_remove_attendee` |
 | `action` | 可閱讀的操作說明 |
 | `details` | 補充 JSON 資料 |
 
@@ -104,9 +104,8 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 - `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
 - `addComment`：在活動紀錄新增一則留言，任何已登入成員都可以。內容由 GAS 重新組裝並限制 150 字，不採用前端送來的 history 條目。
 - 編輯活動時，GAS 只更新活動內容並保留雲端最新報名名單，避免舊分頁覆蓋新報名。
-- `toggleRSVP`：使用明確的 `join`／`cancel`，不再用模糊的切換操作。
-- 固定團的 `toggleRSVP` 會另外接收 `participationType = fixed` 或 `weekly`；兩種參與方式互斥。
-- 固定團主揪必須保持固定參與，如需退出一樣要先交棒。
+- `toggleRSVP`：使用明確的 `join`／`cancel`，不再用模糊的切換操作。固定團與一般活動走同一條路徑。
+- 固定團主揪不可直接取消參與，如需退出一樣要先交棒。
 - `deleteEvent`：將活動標記為 `deleted`，請求處理當下不刪除 Sheet 列（列的移除只由每日歸檔執行）。
 - 主揪不能直接退出，必須先交棒給已報名成員；GAS 也會再次驗證交棒對象。
 - `mutationId` 已處理過時會直接回覆成功，不會再執行一次。
@@ -168,8 +167,8 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 2. 報名或退出時，同一列的 `attendees` 與 `history` 更新。
 3. `AuditLog` 每次操作都增加一列。
 4. 刪除後原列仍在 `Events` 且 `status = deleted`，`/exec` 回傳已不含該活動；執行「立即歸檔過期活動」後該列移到 `EventsArchive`。
-5. 建立固定團後，確認 `isFixedGroup = TRUE`、`fixedTimeText` 有內容，主揪出現在 `fixedAttendees`。
-6. 分別測試固定參與與本週參與，確認兩個欄位不會同時包含同一位成員。
+5. 建立固定團後，確認 `isFixedGroup = TRUE`、`fixedTimeText` 有內容，主揪出現在 `attendees`。
+6. 固定團按「本週參與／本週取消」，確認 `attendees` 正確增減，且 `fixedAttendees`／`weeklyAttendees` 維持空陣列。
 7. 建立一般未過期活動，確認 `calendarEventId` 有值，Google 日曆中出現同名行程，且行程的說明欄是**空的**（不得包含成員名單）。
 8. 修改名稱、時間與地點，確認更新原行程而不是新增重複行程。
 9. 刪除未過期活動，確認對應行程一併移除。

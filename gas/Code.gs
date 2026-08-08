@@ -409,7 +409,7 @@ function showSchemaInfo() {
   const message = [
     "Events：保存活動目前狀態，status 為 active 或 deleted。",
     "固定團：isFixedGroup 為 TRUE，固定時間保存在 fixedTimeText。",
-    "固定參與與本週參與分別保存在 fixedAttendees 與 weeklyAttendees。",
+    "固定團與一般活動共用同一份 attendees 名單，沒有分固定／本週參與。",
     "Google 日曆：calendarEventId 保存對應行程 ID，日曆 ID 只保存在 Script Properties。",
     "AuditLog：永久保存建立、報名、退出、編輯、交棒與刪除紀錄。",
     "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。"
@@ -464,7 +464,7 @@ function doPost(e) {
     const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
     const auditSheet = getRequiredSheet_(APP_CONFIG.AUDIT_SHEET);
 
-    const needsFixedGroupSchema = payload.participationType || payload.isFixedGroup === true ||
+    const needsFixedGroupSchema = payload.isFixedGroup === true ||
       String(payload.isFixedGroup || "").toLowerCase() === "true";
     if (needsFixedGroupSchema && !hasRequiredHeaders_(eventsSheet, EVENT_HEADERS)) {
       throw new Error("固定團欄位尚未初始化，請先執行 setupProject()。");
@@ -622,11 +622,9 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
     // 否則舊快照的空字串會清掉連結，下次儲存就會另外建立重複的日曆行程。
     normalizedEvent.calendarEventId = String(existingEvent.calendarEventId || "");
     normalizedEvent.isFixedGroup = existingEvent.isFixedGroup === true;
-    normalizedEvent.fixedAttendees = normalizeUsers_(existingEvent.fixedAttendees);
-    normalizedEvent.weeklyAttendees = normalizeUsers_(existingEvent.weeklyAttendees);
-    normalizedEvent.attendees = normalizedEvent.isFixedGroup
-      ? normalizeUsers_(normalizedEvent.fixedAttendees.concat(normalizedEvent.weeklyAttendees))
-      : normalizeUsers_(existingEvent.attendees);
+    normalizedEvent.attendees = normalizeUsers_(existingEvent.attendees);
+    normalizedEvent.fixedAttendees = [];
+    normalizedEvent.weeklyAttendees = [];
     normalizedEvent.history = mergeHistoryLists_(existingEvent.history, payload.history);
 
     if (eventAction === "handoff") {
@@ -639,14 +637,6 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
       if (!newHostUserId || newHostUserId === getHostUserId_(existingEvent) || !isRegistered) {
         throw new Error("新主揪必須是另一位已報名成員。");
       }
-      if (normalizedEvent.isFixedGroup) {
-        const newHost = normalizedEvent.attendees.find(user => String(user.userId) === String(newHostUserId));
-        normalizedEvent.weeklyAttendees = normalizedEvent.weeklyAttendees.filter(user =>
-          String(user.userId) !== String(newHostUserId)
-        );
-        normalizedEvent.fixedAttendees = normalizeUsers_([newHost].concat(normalizedEvent.fixedAttendees));
-        normalizedEvent.attendees = normalizeUsers_(normalizedEvent.fixedAttendees.concat(normalizedEvent.weeklyAttendees));
-      }
     } else {
       // 一般編輯不可順便手動改主揪；交棒必須使用 handoff 動作。
       normalizedEvent.hostUser = existingEvent.hostUser;
@@ -655,16 +645,12 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
   } else {
     // 新活動一律從沒有日曆行程開始，不接受前端帶進來的 calendarEventId。
     normalizedEvent.calendarEventId = "";
+    normalizedEvent.fixedAttendees = [];
+    normalizedEvent.weeklyAttendees = [];
     const creatingHost = normalizeUser_(normalizedEvent.hostUser);
-    if (normalizedEvent.isFixedGroup) {
-      normalizedEvent.fixedAttendees = normalizeUsers_([creatingHost].concat(normalizedEvent.fixedAttendees || []));
-      normalizedEvent.weeklyAttendees = normalizeUsers_(normalizedEvent.weeklyAttendees);
-      normalizedEvent.attendees = normalizeUsers_(normalizedEvent.fixedAttendees.concat(normalizedEvent.weeklyAttendees));
-      if (!normalizedEvent.fixedTimeText) throw new Error("固定團必須填寫固定時間。");
-    } else {
-      normalizedEvent.fixedAttendees = [];
-      normalizedEvent.weeklyAttendees = [];
-      normalizedEvent.attendees = normalizeUsers_([creatingHost].concat(normalizedEvent.attendees || []));
+    normalizedEvent.attendees = normalizeUsers_([creatingHost].concat(normalizedEvent.attendees || []));
+    if (normalizedEvent.isFixedGroup && !normalizedEvent.fixedTimeText) {
+      throw new Error("固定團必須填寫固定時間。");
     }
   }
 
@@ -714,10 +700,7 @@ function updateRsvp_(eventsSheet, auditSheet, payload) {
   const eventItem = found.event;
   assertActiveEvent_(eventItem);
 
-  if (eventItem.isFixedGroup === true) {
-    return updateFixedGroupRsvp_(eventsSheet, auditSheet, found, payload, userId);
-  }
-
+  // 固定團與一般活動的報名邏輯完全相同，只差在沒有日期。
   const attendees = normalizeUsers_(eventItem.attendees);
   const existingIndex = attendees.findIndex(user => String(user.userId) === userId);
   const intent = ["join", "cancel"].includes(String(payload.rsvpAction))
@@ -835,13 +818,6 @@ function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
   attendees = attendees.filter(u => String(u.userId) !== targetUserId);
   eventItem.attendees = attendees;
 
-  if (eventItem.isFixedGroup === true) {
-    let fixedList = normalizeUsers_(eventItem.fixedAttendees);
-    let weeklyList = normalizeUsers_(eventItem.weeklyAttendees);
-    eventItem.fixedAttendees = fixedList.filter(u => String(u.userId) !== targetUserId);
-    eventItem.weeklyAttendees = weeklyList.filter(u => String(u.userId) !== targetUserId);
-  }
-
   if (payload.historyEntry) {
     eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
   }
@@ -866,87 +842,6 @@ function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
   };
 }
 
-function updateFixedGroupRsvp_(eventsSheet, auditSheet, found, payload, userId) {
-  const eventItem = found.event;
-  const participationType = ["fixed", "weekly"].includes(String(payload.participationType))
-    ? String(payload.participationType)
-    : "weekly";
-  const intent = ["join", "cancel"].includes(String(payload.rsvpAction))
-    ? String(payload.rsvpAction)
-    : "join";
-  const hostUserId = getHostUserId_(eventItem);
-
-  let fixedAttendees = normalizeUsers_(eventItem.fixedAttendees);
-  let weeklyAttendees = normalizeUsers_(eventItem.weeklyAttendees);
-  const wasInFixed = fixedAttendees.some(user => String(user.userId) === userId);
-  const wasInWeekly = weeklyAttendees.some(user => String(user.userId) === userId);
-  const wasRegistered = wasInFixed || wasInWeekly;
-
-  if (String(hostUserId) === userId && (intent === "cancel" || participationType === "weekly")) {
-    throw new Error("固定團主揪必須維持固定參與；如需退出請先交棒。");
-  }
-
-  if (intent === "join" && !wasRegistered) {
-    const maxAttendees = Number(eventItem.maxAttendees || 0);
-    if (maxAttendees > 0 && eventItem.attendees.length >= maxAttendees) {
-      throw new Error("活動人數已滿。");
-    }
-  }
-
-  const joiningUser = normalizeUser_({
-    userId: userId,
-    displayName: payload.displayName,
-    pictureUrl: payload.pictureUrl
-  });
-
-  if (intent === "join") {
-    fixedAttendees = fixedAttendees.filter(user => String(user.userId) !== userId);
-    weeklyAttendees = weeklyAttendees.filter(user => String(user.userId) !== userId);
-    if (participationType === "fixed") fixedAttendees.push(joiningUser);
-    else weeklyAttendees.push(joiningUser);
-  } else if (participationType === "fixed") {
-    fixedAttendees = fixedAttendees.filter(user => String(user.userId) !== userId);
-  } else {
-    weeklyAttendees = weeklyAttendees.filter(user => String(user.userId) !== userId);
-  }
-
-  eventItem.fixedAttendees = normalizeUsers_(fixedAttendees);
-  eventItem.weeklyAttendees = normalizeUsers_(weeklyAttendees);
-  eventItem.attendees = normalizeUsers_(eventItem.fixedAttendees.concat(eventItem.weeklyAttendees));
-  eventItem.history = mergeHistoryEntries_(eventItem.history, payload.historyEntry);
-  eventItem.updatedAt = new Date().toISOString();
-  eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
-  writeEvent_(eventsSheet, found.rowNumber, eventItem);
-
-  const actionMap = {
-    fixed_join: "固定參與活動",
-    fixed_cancel: "取消固定參與",
-    weekly_join: "本週參與活動",
-    weekly_cancel: "取消本週參與"
-  };
-  const actionKey = participationType + "_" + intent;
-  appendAudit_(auditSheet, payload, {
-    eventId: eventItem.id,
-    actionType: actionKey,
-    action: actionMap[actionKey],
-    details: {
-      attendeeUserId: userId,
-      attendeeName: String(payload.displayName || payload.actorName || ""),
-      participationType: participationType,
-      attendeeCount: eventItem.attendees.length
-    }
-  });
-
-  return {
-    eventId: eventItem.id,
-    rsvpAction: intent,
-    participationType: participationType,
-    attendees: eventItem.attendees,
-    fixedAttendees: eventItem.fixedAttendees,
-    weeklyAttendees: eventItem.weeklyAttendees,
-    history: eventItem.history
-  };
-}
 
 function softDeleteEvent_(eventsSheet, auditSheet, payload) {
   const eventId = requireText_(payload.eventId || payload.id, "缺少 eventId");
@@ -1125,15 +1020,15 @@ function rowToEvent_(headers, row) {
   if (!eventItem.status) eventItem.status = APP_CONFIG.STATUS_ACTIVE;
   eventItem.deleted = isDeletedEvent_(eventItem);
   eventItem.isFixedGroup = eventItem.isFixedGroup === true;
-  eventItem.fixedAttendees = normalizeUsers_(eventItem.fixedAttendees);
-  eventItem.weeklyAttendees = normalizeUsers_(eventItem.weeklyAttendees);
-  if (eventItem.isFixedGroup && eventItem.fixedAttendees.length === 0 && eventItem.weeklyAttendees.length === 0) {
-    eventItem.fixedAttendees = normalizeUsers_(eventItem.attendees);
-  }
-  if (eventItem.isFixedGroup) {
-    eventItem.attendees = normalizeUsers_(eventItem.fixedAttendees.concat(eventItem.weeklyAttendees));
-  }
-  eventItem.attendees = normalizeUsers_(eventItem.attendees);
+  // 舊資料相容：固定團曾經把名單拆成固定參與／本週參與兩份，
+  // 現在只用單一 attendees。讀取時併回來，之後一律寫入空陣列。
+  const legacyFixed = normalizeUsers_(eventItem.fixedAttendees);
+  const legacyWeekly = normalizeUsers_(eventItem.weeklyAttendees);
+  eventItem.attendees = normalizeUsers_(
+    normalizeUsers_(eventItem.attendees).concat(legacyFixed, legacyWeekly)
+  );
+  eventItem.fixedAttendees = [];
+  eventItem.weeklyAttendees = [];
   eventItem.history = Array.isArray(eventItem.history) ? eventItem.history : [];
   return eventItem;
 }
@@ -1190,8 +1085,8 @@ function normalizeEvent_(payload, existingEvent) {
     maxAttendees: Math.max(0, Number(source.maxAttendees || 0)),
     description: String(source.description || ""),
     attendees: normalizeUsers_(source.attendees),
-    fixedAttendees: normalizeUsers_(source.fixedAttendees),
-    weeklyAttendees: normalizeUsers_(source.weeklyAttendees),
+    fixedAttendees: [],
+    weeklyAttendees: [],
     history: trimEventHistory_(source.history),
     calendarEventId: String(source.calendarEventId || ""),
     createdAt: String(source.createdAt || ""),

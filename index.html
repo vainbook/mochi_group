@@ -1036,13 +1036,73 @@
       word-break: break-word;
     }
 
-    .comment-event-title {
-      font-size: 14px;
+    /* 留言視窗 */
+    .comment-target {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 18px;
+    }
+
+    .comment-target-label {
+      display: block;
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 3px;
+    }
+
+    .comment-target-title {
+      font-size: 15px;
       font-weight: bold;
       color: #0f172a;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #e2e8f0;
+      word-break: break-word;
+    }
+
+    .comment-textarea {
+      min-height: 110px;
+      line-height: 1.6;
+      resize: none;
+    }
+
+    .comment-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .comment-meta-hint {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .comment-counter {
+      font-size: 11px;
+      color: #94a3b8;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    .comment-counter.is-near-limit {
+      color: #d97706;
+      font-weight: bold;
+    }
+
+    .comment-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .comment-actions .line-btn {
+      flex: 1;
+      padding: 13px;
+    }
+
+    .comment-actions .btn-join {
+      flex: 1.6;
     }
 
     /* Alert Textbox */
@@ -1098,7 +1158,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-08T16:14:41+08:00">v260808.1614</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-08T16:48:43+08:00">v260808.1648</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1153,7 +1213,7 @@
         <span id="title-calendar" class="modal-title-text">活動日曆</span>
         <button class="modal-close" data-close="modal-calendar" aria-label="關閉活動日曆視窗">關閉</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-form-body">
         <p id="calendar-hint" class="calendar-hint">
           這裡顯示所有未過期的一般活動。固定團沒有固定日期，不會出現在日曆上。
         </p>
@@ -1186,18 +1246,24 @@
         <span id="title-comment" class="modal-title-text">活動留言</span>
         <button class="modal-close" data-close="modal-comment" aria-label="關閉活動留言視窗">關閉</button>
       </div>
-      <div class="modal-body">
-        <div id="comment-event-title" class="comment-event-title"></div>
+      <div class="modal-form-body" style="padding-bottom:18px;">
+        <div class="comment-target">
+          <span class="comment-target-label">留言對象</span>
+          <span id="comment-event-title" class="comment-target-title"></span>
+        </div>
         <form id="form-comment">
           <div class="form-group">
             <label class="form-label" for="comment-text">留言內容</label>
-            <textarea id="comment-text" class="line-input" rows="3" maxlength="150"
-              placeholder="例如：我會晚 10 分鐘到、球場改到 3 號場"></textarea>
-            <div class="form-help"><span id="comment-count">0</span> / 150 字，留言會出現在活動紀錄中</div>
+            <textarea id="comment-text" class="line-input comment-textarea" rows="4" maxlength="150"
+              placeholder="例如：&#10;我會晚 10 分鐘到&#10;球場改到 3 號場"></textarea>
+            <div class="comment-meta">
+              <span class="comment-meta-hint">留言會出現在活動紀錄中</span>
+              <span id="comment-count-wrap" class="comment-counter"><span id="comment-count">0</span>/150</span>
+            </div>
           </div>
-          <div style="display:flex; gap:8px; margin-top:12px;">
-            <button type="button" class="line-btn btn-detail" style="flex:1;" data-close="modal-comment">取消</button>
-            <button type="submit" class="line-btn btn-join" style="flex:1.5;">送出留言</button>
+          <div class="comment-actions">
+            <button type="button" class="line-btn btn-detail" data-close="modal-comment">取消</button>
+            <button type="submit" class="line-btn btn-join">送出留言</button>
           </div>
         </form>
       </div>
@@ -1484,7 +1550,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260808.1614", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260808.1648", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1634,16 +1700,12 @@
 
     function normalizeFixedGroupParticipation(evt) {
       if (!evt) return evt;
-      evt.fixedAttendees = uniqueUsers(evt.fixedAttendees);
-      evt.weeklyAttendees = uniqueUsers(evt.weeklyAttendees);
-      if (isFixedGroup(evt) && evt.fixedAttendees.length === 0 && evt.weeklyAttendees.length === 0) {
-        evt.fixedAttendees = uniqueUsers(evt.attendees);
-      }
-      if (isFixedGroup(evt)) {
-        evt.attendees = uniqueUsers(evt.fixedAttendees.concat(evt.weeklyAttendees));
-      } else {
-        evt.attendees = uniqueUsers(evt.attendees);
-      }
+      // 舊資料相容：固定團曾經拆成固定參與／本週參與兩份名單，
+      // 現在只用單一 attendees。讀到舊資料就併回來並清空。
+      const legacy = uniqueUsers([].concat(evt.fixedAttendees || [], evt.weeklyAttendees || []));
+      evt.attendees = uniqueUsers([].concat(evt.attendees || [], legacy));
+      evt.fixedAttendees = [];
+      evt.weeklyAttendees = [];
       return evt;
     }
 
@@ -2559,12 +2621,6 @@
       if (confirm(`確定要將成員「${targetUserName}」從活動「${evt.title}」的名單中移除嗎？`)) {
         const snapshot = snapshotEventState(evt);
         evt.attendees = (evt.attendees || []).filter(u => String(u.userId) !== String(targetUserId));
-        
-        if (isFixedGroup(evt)) {
-          evt.fixedAttendees = (evt.fixedAttendees || []).filter(u => String(u.userId) !== String(targetUserId));
-          evt.weeklyAttendees = (evt.weeklyAttendees || []).filter(u => String(u.userId) !== String(targetUserId));
-          normalizeFixedGroupParticipation(evt);
-        }
 
         addHistoryLog(evt, `管理員移除成員 ${targetUserName}`, "leave");
         saveLocalEvents();
@@ -2775,12 +2831,6 @@
         const maxCap = getMaxAttendees(evt);
         const isFull = maxCap > 0 && evt.attendees.length >= maxCap;
         const isAttending = currentUser ? evt.attendees.some(u => u.userId === currentUser.userId) : false;
-        const isFixedParticipant = currentUser
-          ? evt.fixedAttendees.some(u => String(u.userId) === String(currentUser.userId))
-          : false;
-        const isWeeklyParticipant = currentUser
-          ? evt.weeklyAttendees.some(u => String(u.userId) === String(currentUser.userId))
-          : false;
         const isHost = isCurrentUserHost(evt);
         
         let tagClass = "tag-open";
@@ -2809,15 +2859,11 @@
           if (isHost) {
             actionButtonsHtml = `
               <button class="line-btn btn-detail" disabled title="如需退出，請到編輯內容更換主揪">你是主揪</button>
-              <button class="line-btn btn-detail" disabled>固定參與</button>
             `;
+          } else if (isFull && !isAttending) {
+            actionButtonsHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>人數已滿</button>`;
           } else {
-            const fixedDisabled = isFull && !isAttending ? "disabled" : "";
-            const weeklyDisabled = isFull && !isAttending ? "disabled" : "";
-            actionButtonsHtml = `
-              <button class="line-btn ${isFixedParticipant ? "btn-cancel" : "btn-join"} fixed-rsvp-action" data-participation="fixed" ${fixedDisabled}>${isFixedParticipant ? "取消固定參與" : "固定參與"}</button>
-              <button class="line-btn ${isWeeklyParticipant ? "btn-cancel" : "btn-calendar"} fixed-rsvp-action" data-participation="weekly" ${weeklyDisabled}>${isWeeklyParticipant ? "取消本週參與" : "本週參與"}</button>
-            `;
+            actionButtonsHtml = `<button class="line-btn ${isAttending ? "btn-cancel" : "btn-join"} rsvp-action">${isAttending ? "本週取消" : "本週參與"}</button>`;
           }
         } else if (isEnded) {
           actionButtonsHtml = `<button class="line-btn" style="background:#e2e8f0; color:#94a3b8;" disabled>已過期</button>`;
@@ -2895,9 +2941,6 @@
         renderSafeLocation(cardEl.querySelector(".event-location"), evt.location);
         const rsvpButton = cardEl.querySelector(".rsvp-action");
         if (rsvpButton) rsvpButton.onclick = () => toggleRSVP(evt.id);
-        cardEl.querySelectorAll(".fixed-rsvp-action").forEach(button => {
-          button.onclick = () => toggleFixedParticipation(evt.id, button.dataset.participation);
-        });
         cardEl.querySelector(".detail-action").onclick = () => openDetailModal(evt.id);
         const commentButton = cardEl.querySelector(".comment-action");
         if (commentButton) commentButton.onclick = () => openCommentModal(evt.id);
@@ -3018,81 +3061,7 @@ ${pageUrl}`;
       });
     }
 
-    function toggleFixedParticipation(eventId, participationType) {
-      if (processingRSVPEventIds.has(eventId)) return;
-      if (!ensureLoggedIn()) return;
 
-      const evt = eventsData.find(eventItem => eventItem.id === eventId);
-      if (!evt || !isFixedGroup(evt)) return;
-      if (isCurrentUserHost(evt)) {
-        alert("固定團主揪必須維持固定參與；如需退出，請先到編輯內容交棒給新主揪。");
-        return;
-      }
-
-      const snapshot = snapshotEventState(evt);
-      normalizeFixedGroupParticipation(evt);
-      const targetList = participationType === "fixed" ? evt.fixedAttendees : evt.weeklyAttendees;
-      const isCurrentlySelected = targetList.some(user => String(user.userId) === String(currentUser.userId));
-      const actionType = isCurrentlySelected ? "cancel" : "join";
-
-      if (actionType === "join" && !evt.attendees.some(user => String(user.userId) === String(currentUser.userId))) {
-        const maxCap = getMaxAttendees(evt);
-        if (maxCap > 0 && evt.attendees.length >= maxCap) {
-          alert(`此固定團已滿（上限 ${maxCap} 人），無法再新增參與者！`);
-          return;
-        }
-      }
-
-      if (actionType === "join") {
-        evt.fixedAttendees = evt.fixedAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
-        evt.weeklyAttendees = evt.weeklyAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
-        if (participationType === "fixed") evt.fixedAttendees.push(currentUser);
-        else evt.weeklyAttendees.push(currentUser);
-      } else if (participationType === "fixed") {
-        evt.fixedAttendees = evt.fixedAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
-      } else {
-        evt.weeklyAttendees = evt.weeklyAttendees.filter(user => String(user.userId) !== String(currentUser.userId));
-      }
-      normalizeFixedGroupParticipation(evt);
-
-      const actionLabels = {
-        fixed_join: "固定參與活動",
-        fixed_cancel: "取消固定參與",
-        weekly_join: "本週參與活動",
-        weekly_cancel: "取消本週參與"
-      };
-      addHistoryLog(evt, actionLabels[`${participationType}_${actionType}`], actionType === "join" ? "join" : "leave");
-
-      processingRSVPEventIds.add(eventId);
-      setTimeout(() => processingRSVPEventIds.delete(eventId), 450);
-      saveLocalEvents();
-      renderEvents();
-      triggerFixedParticipationCopy(evt, participationType, actionType);
-
-      sendPostToGAS({
-        action: "toggleRSVP",
-        rsvpAction: actionType,
-        participationType: participationType,
-        eventId: evt.id,
-        userId: currentUser.userId,
-        displayName: currentUser.displayName,
-        pictureUrl: currentUser.pictureUrl,
-        historyEntry: evt.history[0]
-      }).then(result => {
-        if (!result.ok) {
-          rollbackEventState(snapshot, `更新固定團參與失敗，已還原名單。\n\n${result.message}`);
-        }
-      });
-    }
-
-    function triggerFixedParticipationCopy(evt, participationType, actionType) {
-      const participationText = participationType === "fixed" ? "固定參與" : "本週參與";
-      const copiedText = actionType === "cancel"
-        ? `取消${participationText}${evt.title}活動`
-        : `${participationText}${evt.title}活動`;
-      safeCopyText(copiedText);
-      showToast("活動資訊已自動複製\n請到群組中貼上分享");
-    }
 
     // --- 12. AUTO-COPY SINGLE EVENT TRIGGER ---
     function triggerAutoCopyAndAlert(evt, actionType) {
@@ -3162,7 +3131,7 @@ ${pageUrl}`;
         deleted: false,
         createdAt: new Date().toISOString(),
         attendees: [currentUser],
-        fixedAttendees: fixedGroup ? [currentUser] : [],
+        fixedAttendees: [],
         weeklyAttendees: [],
         history: []
       };
@@ -3205,6 +3174,7 @@ ${pageUrl}`;
       const input = document.getElementById("comment-text");
       input.value = "";
       document.getElementById("comment-count").innerText = "0";
+      document.getElementById("comment-count-wrap").classList.remove("is-near-limit");
       openModal("modal-comment");
       setTimeout(() => input.focus(), 50);
     }
@@ -3414,11 +3384,6 @@ ${pageUrl}`;
           pictureUrl: selectedHost.pictureUrl || ""
         };
         evt.hostName = newHostName;
-        if (fixedGroup) {
-          evt.weeklyAttendees = evt.weeklyAttendees.filter(user => String(user.userId) !== selectedHostId);
-          evt.fixedAttendees = uniqueUsers([selectedHost].concat(evt.fixedAttendees));
-          normalizeFixedGroupParticipation(evt);
-        }
         addHistoryLog(evt, `將主揪交棒給「${newHostName}」`, "handoff");
       }
 
@@ -3489,14 +3454,6 @@ ${pageUrl}`;
           const name = document.createElement("span");
           name.textContent = displayName;
           pill.append(image, name);
-          if (isFixedGroup(evt)) {
-            const type = document.createElement("span");
-            type.className = "attendance-type";
-            type.textContent = evt.fixedAttendees.some(member => String(member.userId) === String(u.userId))
-              ? "固定"
-              : "本週";
-            pill.append(type);
-          }
           if (canManageAttendees(evt) && String(u.userId) !== String(evt.hostUser?.userId || "")) {
             const removeBtn = document.createElement("span");
             removeBtn.className = "btn-remove-attendee";
@@ -3560,13 +3517,7 @@ ${pageUrl}`;
 人數：${capacityText}
 活動說明：${evt.description || "尚無補充說明"}`;
         let memberDetails;
-        if (isFixedGroup(evt)) {
-          const fixedNames = evt.fixedAttendees.map(user => `@${user.displayName}`).join(" ") || "尚無";
-          const weeklyNames = evt.weeklyAttendees.map(user => `@${user.displayName}`).join(" ") || "尚無";
-          memberDetails = `固定參與：${fixedNames}\n本週參與：${weeklyNames}`;
-        } else {
-          memberDetails = `已報名成員：${evt.attendees.map(user => `@${user.displayName}`).join(" ")}`;
-        }
+        memberDetails = `${isFixedGroup(evt) ? "本週參與" : "已報名成員"}：${evt.attendees.map(user => `@${user.displayName}`).join(" ") || "尚無"}`;
         const mentionNoticeText = 
 `【${isFixedGroup(evt) ? "固定團" : "活動"}成員提醒：${evt.title}】
 ${baseDetails}
@@ -3719,7 +3670,10 @@ ${memberDetails}
         submitComment();
       });
       document.getElementById("comment-text").addEventListener("input", (e) => {
-        document.getElementById("comment-count").innerText = String(e.target.value.length);
+        const used = e.target.value.length;
+        document.getElementById("comment-count").innerText = String(used);
+        document.getElementById("comment-count-wrap")
+          .classList.toggle("is-near-limit", used > MAX_COMMENT_LENGTH - 20);
       });
 
       document.getElementById("btn-broadcast-all").onclick = () => {
