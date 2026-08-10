@@ -1158,7 +1158,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-08T16:48:43+08:00">v260808.1648</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-10T12:59:00+08:00">v260810.1259</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1444,9 +1444,14 @@
         <div style="margin-bottom:14px;">
           <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
             <span><span id="detail-attendee-heading">已報名成員名冊</span> (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
-            <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
-              @標記成員
-            </button>
+            <span style="display:flex; gap:6px; flex-shrink:0;">
+              <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
+                @標記成員
+              </button>
+              <button id="btn-share-event" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
+                分享活動
+              </button>
+            </span>
           </div>
           <div id="detail-attendees" style="background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0; max-height:140px; overflow-y:auto; display:flex; flex-wrap:wrap; gap:6px;">
             <!-- Attendees -->
@@ -1550,7 +1555,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260808.1648", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260810.1259", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2592,7 +2597,8 @@
       if (!dt || isNaN(dt.getTime())) return "日期待定";
       const mm = String(dt.getMonth() + 1).padStart(2, '0');
       const dd = String(dt.getDate()).padStart(2, '0');
-      return `${mm}/${dd}`;
+      const weekday = ["日", "一", "二", "三", "四", "五", "六"][dt.getDay()];
+      return `${mm}/${dd} (${weekday})`;
     }
 
     function canManageAttendees(evt) {
@@ -2970,19 +2976,15 @@
 
       const pageUrl = getShareableUrl();
 
-      const eventBlocks = openEvents.map((evt, idx) => {
-        const formattedTime = getEventTimeText(evt);
+      // 宣傳只列最精簡的資訊：時間、名稱、人數。
+      const eventBlocks = openEvents.map(evt => {
         const maxCap = getMaxAttendees(evt);
         const capacityStr = `${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人`;
-        
-        return `${idx + 1}. 【${evt.title}】
-時間：${formattedTime}
-地點：${normalizeLocation(evt.location)}
-目前人數：${capacityStr}`;
-      }).join("\n\n");
+        return `${getEventTimeText(evt)} ${evt.title} (${capacityStr})`;
+      }).join("\n");
 
-      const broadcastText = 
-`【群組熱門活動總通報】
+      const broadcastText =
+`【群組活動】
 ${eventBlocks}
 
 點此線上報名：
@@ -3502,31 +3504,37 @@ ${pageUrl}`;
         openModal("modal-edit");
       };
 
+      // 純標記用：只複製 LINE 名字，貼到群組即可觸發 @ 提及。
       document.getElementById("btn-mention-attendees").onclick = () => {
         if (evt.attendees.length === 0) {
           alert("目前沒有已報名的成員可標記！");
           return;
         }
+        const mentionText = evt.attendees.map(user => `@${user.displayName}`).join(" ");
+        safeCopyText(mentionText);
+        showToast("📋 已複製成員標記");
+      };
 
+      // 完整活動內容分享。
+      document.getElementById("btn-share-event").onclick = () => {
         const maxCapacity = getMaxAttendees(evt);
         const capacityText = `${evt.attendees.length}${maxCapacity > 0 ? "/" + maxCapacity : ""} 人`;
-        const baseDetails = `時間：${formattedTime}
+        const memberNames = evt.attendees.map(user => `@${user.displayName}`).join(" ") || "尚無";
+        const shareText =
+`【${isFixedGroup(evt) ? "固定團" : "活動"}：${evt.title}】
+時間：${formattedTime}
 地點：${normalizeLocation(evt.location)}
 費用：${evt.fee || "免費"}
 主揪：${evt.hostName || evt.hostUser?.displayName || "未指定"}
 人數：${capacityText}
-活動說明：${evt.description || "尚無補充說明"}`;
-        let memberDetails;
-        memberDetails = `${isFixedGroup(evt) ? "本週參與" : "已報名成員"}：${evt.attendees.map(user => `@${user.displayName}`).join(" ") || "尚無"}`;
-        const mentionNoticeText = 
-`【${isFixedGroup(evt) ? "固定團" : "活動"}成員提醒：${evt.title}】
-${baseDetails}
-${memberDetails}
+活動說明：${evt.description || "尚無補充說明"}
+${isFixedGroup(evt) ? "本週參與" : "已報名成員"}：${memberNames}
 
-各位記得準時出席活動唷！`;
+點此線上報名：
+${getShareableUrl()}`;
 
-        safeCopyText(mentionNoticeText);
-        showToast("📋 已複製成員標記，請分享到群組！");
+        safeCopyText(shareText);
+        showToast("📋 已複製活動內容");
       };
 
       const deleteBtn = document.getElementById("btn-delete-event");
