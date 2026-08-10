@@ -934,30 +934,33 @@
       line-height: 1.7;
     }
 
-    /* 許願活動卡片：黑底夜空 + 星星閃爍 */
-    .event-card.is-wish {
-      background: linear-gradient(165deg, #0b1120 0%, #172554 55%, #1e1b4b 100%);
-      border-color: #312e81;
+    /* 許願活動：星空只套在摺疊標題列，展開後的內容維持一般樣式 */
+    .event-card.is-wish .card-summary-bar,
+    .event-card.is-wish .card-summary-bar:active,
+    .event-card.is-wish.is-expanded .card-summary-bar {
+      background: linear-gradient(115deg, #0b1120 0%, #172554 55%, #312e81 100%);
+      position: relative;
       overflow: hidden;
+      border-bottom-color: rgba(148, 163, 184, 0.3);
     }
 
-    .event-card.is-wish::before {
+    .event-card.is-wish .card-summary-bar::before {
       content: "";
       position: absolute;
       inset: 0;
       z-index: 0;
       pointer-events: none;
       background-image:
-        radial-gradient(1.6px 1.6px at 11% 18%, #ffffff, transparent),
-        radial-gradient(1.2px 1.2px at 27% 63%, #e0f2fe, transparent),
-        radial-gradient(1.8px 1.8px at 44% 29%, #ffffff, transparent),
-        radial-gradient(1.1px 1.1px at 61% 74%, #bfdbfe, transparent),
-        radial-gradient(1.5px 1.5px at 73% 21%, #ffffff, transparent),
-        radial-gradient(1.2px 1.2px at 86% 56%, #e0f2fe, transparent),
-        radial-gradient(1.3px 1.3px at 34% 88%, #ffffff, transparent),
-        radial-gradient(1px 1px at 93% 84%, #bfdbfe, transparent),
-        radial-gradient(1.4px 1.4px at 17% 45%, #ffffff, transparent),
-        radial-gradient(1.1px 1.1px at 55% 8%, #e0f2fe, transparent);
+        radial-gradient(1.6px 1.6px at 8% 32%, #ffffff, transparent),
+        radial-gradient(1.2px 1.2px at 21% 71%, #e0f2fe, transparent),
+        radial-gradient(1.7px 1.7px at 34% 24%, #ffffff, transparent),
+        radial-gradient(1.1px 1.1px at 47% 66%, #bfdbfe, transparent),
+        radial-gradient(1.5px 1.5px at 58% 18%, #ffffff, transparent),
+        radial-gradient(1.2px 1.2px at 69% 78%, #e0f2fe, transparent),
+        radial-gradient(1.3px 1.3px at 79% 36%, #ffffff, transparent),
+        radial-gradient(1px 1px at 90% 68%, #bfdbfe, transparent),
+        radial-gradient(1.4px 1.4px at 15% 52%, #ffffff, transparent),
+        radial-gradient(1.1px 1.1px at 63% 46%, #e0f2fe, transparent);
       animation: wish-twinkle 3.4s ease-in-out infinite alternate;
     }
 
@@ -967,54 +970,38 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .event-card.is-wish::before { animation: none; opacity: 0.8; }
+      .event-card.is-wish .card-summary-bar::before { animation: none; opacity: 0.8; }
     }
 
-    .event-card.is-wish > * {
+    .event-card.is-wish .card-summary-bar > * {
       position: relative;
       z-index: 1;
     }
 
-    /* 卡片各層原本都有白底，會蓋掉星空，全部改為透明。 */
-    .event-card.is-wish .card-summary-bar,
-    .event-card.is-wish .card-summary-bar:active,
-    .event-card.is-wish.is-expanded .card-summary-bar {
-      background: transparent;
-      border-bottom-color: rgba(148, 163, 184, 0.35);
-    }
-
-    .event-card.is-wish .card-info {
-      background: rgba(15, 23, 42, 0.35);
-      border-color: rgba(148, 163, 184, 0.25);
-    }
-
     .event-card.is-wish .event-summary-title,
-    .event-card.is-wish .card-title,
-    .event-card.is-wish .card-info,
-    .event-card.is-wish .info-row span,
     .event-card.is-wish .expand-icon {
       color: #e2e8f0;
     }
 
-    .event-card.is-wish .info-label {
-      color: #94a3b8;
-    }
-
     .event-card.is-wish .event-time-chip {
-      background: rgba(226, 232, 240, 0.16);
+      background: rgba(226, 232, 240, 0.18);
       color: #e2e8f0;
     }
 
-    .event-card.is-wish .attendee-pill {
-      background: rgba(226, 232, 240, 0.14);
-      color: #e2e8f0;
-      border-color: rgba(226, 232, 240, 0.3);
+    /* 許願結算狀態：刻意做得比一般資訊列醒目 */
+    .wish-status {
+      margin-top: 10px;
+      color: #db2777;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.6;
+      letter-spacing: 0.2px;
     }
 
     .tag-wish {
-      background: #1e1b4b;
-      color: #c7d2fe;
-      border: 1px solid #4338ca;
+      background: rgba(236, 72, 153, 0.2);
+      color: #fbcfe8;
+      border: 1px solid #ec4899;
     }
 
     .fixed-time-field {
@@ -1269,7 +1256,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-10T13:25:14+08:00">v260810.1325</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-10T13:53:30+08:00">v260810.1353</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1676,7 +1663,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260810.1325", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260810.1353", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -3023,10 +3010,9 @@
           tagClass = "tag-ended";
           tagText = "已過期";
         } else if (wishEvent) {
-          // 標籤要短，否則會把摺疊標題擠掉；詳細狀態放在展開內容裡。
-          const daysLeft = getWishDaysLeft(evt);
+          // 標籤固定文字，倒數與人數狀態放在展開內容的資訊列。
           tagClass = "tag-wish";
-          tagText = daysLeft === 0 ? "許願 · 今晚" : `許願 · 剩${daysLeft}天`;
+          tagText = "許願中";
         } else if (isFull) {
           tagClass = "tag-full";
           tagText = "揪團已滿";
@@ -3093,11 +3079,9 @@
                 <span class="info-label">人數：</span>
                 <span style="color:var(--line-green-dark); font-weight:bold;">${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人</span>
               </div>
-              ${wishEvent ? `<div class="info-row">
-                <span class="info-label">許願：</span>
-                <span>${getWishStatusText(evt)}</span>
-              </div>` : ""}
             </div>
+
+            ${wishEvent ? `<div class="wish-status">${getWishStatusText(evt)}</div>` : ""}
 
             <div class="card-actions ${fixedGroup ? "fixed-actions" : ""}">
               ${actionButtonsHtml}
