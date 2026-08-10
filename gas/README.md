@@ -24,7 +24,7 @@
 3. 備份原本的 `Code.gs`。
 4. 將本資料夾的 `Code.gs` 完整貼入並儲存。
 5. 在 Apps Script 上方函式選單選擇 `setupProject`，執行一次並完成 Sheet、Google Calendar 與觸發器授權。
-6. 確認試算表出現 `Events`、`EventsArchive` 與 `AuditLog` 三張工作表，且「觸發條件」頁面出現每日執行的 `archiveRetiredEvents`。
+6. 確認試算表出現 `Events`、`EventsArchive` 與 `AuditLog` 三張工作表，且「觸發條件」頁面出現每日執行的 `archiveRetiredEvents`（凌晨 4 點）與 `cleanupExpiredWishes`（午夜 0 點）。
 7. 重新整理 Google Sheet，選擇「活動布告欄 → 設定 Google 日曆」，貼上日曆網址或 Calendar ID。
 8. 如需把既有未過期活動補進日曆，選擇「活動布告欄 → 同步現有未過期活動」。
 9. 選擇「部署 → 管理部署作業」。
@@ -35,7 +35,7 @@
 
 `setupProject()` 不會刪除既有資料。如果原本工作表第一列已包含 `id` 與 `title`，它會將該表改名為 `Events`，並在右側補齊缺少欄位。
 
-固定團功能至少需要表格結構版本 `2`；Google 日曆連動新增 `calendarEventId` 欄位，因此目前完整結構版本為 `3`。新版 GAS 貼上後一定要重新執行一次 `setupProject()`。
+固定團功能至少需要表格結構版本 `2`；Google 日曆連動新增 `calendarEventId` 欄位（版本 `3`）；許願功能新增 `isWish` 欄位，因此目前完整結構版本為 `4`。新版 GAS 貼上後一定要重新執行一次 `setupProject()`。
 
 Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取得網址中的地點名稱或地址。網頁會以該名稱作為可點擊的地圖連結，不需要 Google Maps API 金鑰。
 
@@ -48,12 +48,13 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `history` 上限 50 筆 | 活動列只留最近 50 筆操作紀錄（含留言）。固定團永不過期，沒有上限會無限膨脹。完整紀錄仍在 `AuditLog`。 |
 | `doGet` 過濾 | 已刪除與過期活動不回傳給前端。 |
 | 每日自動歸檔 | 凌晨 4 點把已刪除與過期活動搬到 `EventsArchive`，並從 `Events` 移除。 |
+| 許願午夜結算 | 每日 00 點結算許願活動，未達標者整列刪除且**不歸檔**。 |
 
 「過期」定義為**活動開始時間 + 2 小時**，所以活動進行中仍看得到，結束後才消失。
 
 **固定團永遠不會被歸檔**（沒有結束時間）。時間欄位無法解析的活動也不會被搬，避免格式問題造成資料誤搬。
 
-觸發器由 `setupProject()` 自動建立，重複執行不會產生多個。也可用選單「立即歸檔過期活動」手動執行。
+觸發器由 `setupProject()` 自動建立，重複執行不會產生多個。也可用選單「立即歸檔過期活動」與「立即結算許願活動」手動執行。
 
 歸檔資料只在 `EventsArchive` 工作表內查看，不經由 Web API 對外提供 —— `includeDeleted` 參數已移除，先前任何拿到 `/exec` 網址的人都能取得已刪除活動的完整成員名單。
 
@@ -66,6 +67,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `title` | 活動名稱 |
 | `datetime` | 活動日期時間 |
 | `isFixedGroup` | 是否為固定團，`TRUE` 代表固定團 |
+| `isWish` | 是否為許願活動，`TRUE` 代表許願 |
 | `fixedTimeText` | 固定團由主揪手寫的時間文字 |
 | `location` | 地點 |
 | `hostName` | 目前主揪顯示名稱 |
@@ -102,6 +104,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 ## 同步與權限規則
 
 - `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
+- 許願活動（`isWish = TRUE`）由午夜觸發器 `cleanupExpiredWishes` 結算：建立滿 3 個日曆天時，當下報名人數超過 3 人則轉為一般活動，否則整列硬刪除且不進 `EventsArchive`。刪除前會先移除對應的 Google 日曆行程。
 - `addComment`：在活動紀錄新增一則留言，任何已登入成員都可以。內容由 GAS 重新組裝並限制 150 字，不採用前端送來的 history 條目。
 - 編輯活動時，GAS 只更新活動內容並保留雲端最新報名名單，避免舊分頁覆蓋新報名。
 - `toggleRSVP`：使用明確的 `join`／`cancel`，不再用模糊的切換操作。固定團與一般活動走同一條路徑。
@@ -156,7 +159,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 部署完成後，直接開啟 GAS `/exec` 網址，應看到類似：
 
 ```json
-{"status":"success","schemaVersion":"3","calendar":{"configured":true,"calendarId":"...","name":"..."},"events":[]}
+{"status":"success","schemaVersion":"4","calendar":{"configured":true,"calendarId":"...","name":"..."},"events":[]}
 ```
 
 看到 `calendar` 欄位才代表部署的是含日曆頁功能的版本。

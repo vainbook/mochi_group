@@ -27,7 +27,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 
 若使用「新增部署」而產生新 `/exec` 網址，必須同步更新 `index.html` 的 `CONFIG.GAS_API_URL`。優先編輯原部署並選「新版本」，以保持網址不變。
 
-線上 `/exec` 的當前結構應回傳最外層 `"schemaVersion":"3"`，並包含 `calendar` 欄位。個別舊活動的 `schemaVersion:1` 只代表建立於舊版，不代表整張 Sheet 仍是舊結構。
+線上 `/exec` 的當前結構應回傳最外層 `"schemaVersion":"4"`，並包含 `calendar` 欄位。個別舊活動的 `schemaVersion:1` 只代表建立於舊版，不代表整張 Sheet 仍是舊結構。
 
 判斷「部署到底更新了沒」時，注意 Sheet 選單功能（設定日曆、歸檔、診斷）跑的是**編輯器裡儲存的程式碼**，不需要部署；只有 `/exec`（LINE 網頁連的端點）用的是部署版本。兩者可能不同步，這是最常見的排查陷阱。
 
@@ -101,6 +101,19 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - GAS 只能追蹤允許的 Google Maps 網域，不可放寬成任意 URL，避免 SSRF。
 - 沒有可解析文字時才回退顯示「Google 地圖位置」。
 
+### 許願活動
+
+- 許願是一般活動上的旗標 `isWish`，使用正常的日期時間，**與固定團互斥**（固定團沒有明確日期，無法做三天結算）。
+- 需要表格結構版本 `4`。schema 低於 4 時顯示但停用「許願（需更新）」。
+- 結算由午夜觸發器 `cleanupExpiredWishes()` 執行，判定用**日曆天**（`getCalendarDayDiff_()`，以專案時區的日期為準），不看時分秒：
+  - 建立滿 `WISH_LIFESPAN_DAYS`（3）天，且當下 `attendees` 人數**超過** `WISH_MIN_ATTENDEES`（3，亦即需 4 人以上）→ 許願成立，`isWish` 設為 false 轉為一般活動。
+  - 否則 → **整列硬刪除**。
+- **硬刪除是本專案唯一不走軟刪除與歸檔的路徑**，這是使用者明確要求的「不留檔」。刪除前必須先移除對應的 Google 日曆行程，否則會留下無主行程。`AuditLog` 的建立紀錄仍保留，那是稽核軌跡。
+- 人數只看當下 `attendees`，不看 `history`。曾經報名又退出的人不算數。
+- 結算後必須把 `isWish` 關掉，否則之後有人退出會讓已成立的活動再次被判定刪除。
+- 卡片樣式為黑底夜空加星星閃爍（CSS `radial-gradient` + `@keyframes`，不使用外部圖片）。卡片各層原本都有白底，套用 `.is-wish` 時要一併改為透明，否則會蓋掉星空。
+- 標籤文字必須簡短（`許願 · 剩3天`），詳細結算狀態放在展開內容的資訊列，否則會把摺疊標題擠掉。
+
 ### 活動留言
 
 - 留言透過 GAS `addComment` action 寫入，會成為活動 `history` 的一筆 `type: "comment"` 紀錄，顯示在活動紀錄中並與系統紀錄有視覺區隔。
@@ -126,6 +139,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 系統中不得存在任何會無限成長的資料。以下三道機制必須同時保留：
 
 - 活動列的 `history` 上限為 `APP_CONFIG.MAX_EVENT_HISTORY`（50 筆，含留言），由 `trimEventHistory_()` 強制。固定團永遠不會過期也不會被歸檔，沒有這道上限它會無限膨脹。完整紀錄保存在 `AuditLog`。
+- 許願活動未達標時整列硬刪除，是唯一不進 `EventsArchive` 的例外，見〈許願活動〉。
 - `doGet` 只回傳仍需顯示的活動，已刪除與已過期一律不送（`isRetiredEvent_()`）。不得恢復 `includeDeleted` 參數，那會讓任何拿到 `/exec` 網址的人取得已刪除活動的成員名單。
 - 已刪除與過期活動由每日觸發器 `archiveRetiredEvents()` 搬到 `EventsArchive`，並從 `Events` 移除該列。固定團與時間無法解析的活動一律不搬。
 
@@ -167,7 +181,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 
 ## 常見故障判斷
 
-- 看到「固定團（需更新）」：先檢查網頁目前 `CONFIG.GAS_API_URL` 的 GET 回應最外層是否為 schema 3（前端門檻是 `>= 2`），再檢查前端是否同步成功。
+- 看到「固定團（需更新）」：先檢查網頁目前 `CONFIG.GAS_API_URL` 的 GET 回應最外層是否為 schema 4（固定團門檻 `>= 2`、許願門檻 `>= 4`），再檢查前端是否同步成功。
 - 日曆完全沒有新增行程：依序確認 `GOOGLE_CALENDAR_ID` 是否存在、「設定 Google 日曆」是否顯示「寫入權限測試通過」、以及部署版本是否包含 `isCalendarEventLive_()`。若同步回報成功但日曆空白，通常是行程曾被手動刪除、而舊版程式碼對已取消的行程做了無效更新 —— 用「日曆診斷」看「連結已失效」的筆數即可確認。
 - 操作看似成功、重新整理後卻復原：代表 GAS 寫入失敗但前端沒有回滾。檢查該操作的 `sendPostToGAS` 呼叫點有沒有處理 `ok === false`，以及是否有未定義函式在送出前就中斷了流程。
 - 地點只顯示「Google 地圖位置」：測試 GAS 是否支援 `resolveMapLocation`；回覆「不支援的 action」表示前端已新、GAS 仍舊或網頁指向錯誤部署網址。

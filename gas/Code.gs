@@ -70,6 +70,10 @@ const APP_CONFIG = Object.freeze({
   // 活動結束後多久才視為過期並移出前端資料。
   // 給 2 小時緩衝，活動進行中仍看得到。
   EVENT_GRACE_MS: 2 * 60 * 60 * 1000,
+  // 許願活動：建立後滿 WISH_LIFESPAN_DAYS 個「日曆天」於午夜結算，
+  // 報名人數超過 WISH_MIN_ATTENDEES 才成立，否則整列硬刪除、不歸檔。
+  WISH_LIFESPAN_DAYS: 3,
+  WISH_MIN_ATTENDEES: 3,
   STATUS_ACTIVE: "active",
   STATUS_DELETED: "deleted",
   ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
@@ -77,7 +81,7 @@ const APP_CONFIG = Object.freeze({
   CALENDAR_ID_PROPERTY: "GOOGLE_CALENDAR_ID",
   CALENDAR_NAME_PROPERTY: "GOOGLE_CALENDAR_NAME",
   LOCK_TIMEOUT_MS: 15000,
-  SCHEMA_VERSION: "3"
+  SCHEMA_VERSION: "4"
 });
 
 const EVENT_HEADERS = Object.freeze([
@@ -86,6 +90,7 @@ const EVENT_HEADERS = Object.freeze([
   "title",
   "datetime",
   "isFixedGroup",
+  "isWish",
   "fixedTimeText",
   "location",
   "hostName",
@@ -134,6 +139,7 @@ function onOpen() {
     .addItem("同步現有未過期活動", "syncAllExistingEventsToCalendar")
     .addItem("日曆診斷", "checkCalendarStatus")
     .addItem("立即歸檔過期活動", "archiveRetiredEventsFromMenu")
+    .addItem("立即結算許願活動", "cleanupExpiredWishesFromMenu")
     .addItem("設定管理員密碼", "setAdminPassword")
     .addItem("顯示表格設計", "showSchemaInfo")
     .addToUi();
@@ -398,7 +404,7 @@ function setupProject() {
     return {
       status: "success",
       message: "Events、EventsArchive 與 AuditLog 已完成初始化，表格結構版本為 " +
-        APP_CONFIG.SCHEMA_VERSION + "。已建立每日自動歸檔觸發器。"
+        APP_CONFIG.SCHEMA_VERSION + "。已建立每日自動歸檔與許願結算觸發器。"
     };
   } finally {
     lock.releaseLock();
@@ -410,6 +416,7 @@ function showSchemaInfo() {
     "Events：保存活動目前狀態，status 為 active 或 deleted。",
     "固定團：isFixedGroup 為 TRUE，固定時間保存在 fixedTimeText。",
     "固定團與一般活動共用同一份 attendees 名單，沒有分固定／本週參與。",
+    "許願活動：isWish 為 TRUE，建立滿 3 天午夜結算，人數未超過 3 人整列刪除且不歸檔。",
     "Google 日曆：calendarEventId 保存對應行程 ID，日曆 ID 只保存在 Script Properties。",
     "AuditLog：永久保存建立、報名、退出、編輯、交棒與刪除紀錄。",
     "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。"
@@ -1011,7 +1018,7 @@ function rowToEvent_(headers, row) {
     let value = row[index];
     if (JSON_EVENT_FIELDS.includes(header)) value = parseJsonField_(value, header === "hostUser" ? null : []);
     if (header === "maxAttendees") value = Number(value || 0);
-    if (["deleted", "isFixedGroup"].includes(header)) {
+    if (["deleted", "isFixedGroup", "isWish"].includes(header)) {
       value = value === true || String(value).toLowerCase() === "true";
     }
     if (typeof value === "string" && /^'[=+\-@]/.test(value)) value = value.slice(1);
@@ -1020,6 +1027,7 @@ function rowToEvent_(headers, row) {
   if (!eventItem.status) eventItem.status = APP_CONFIG.STATUS_ACTIVE;
   eventItem.deleted = isDeletedEvent_(eventItem);
   eventItem.isFixedGroup = eventItem.isFixedGroup === true;
+  eventItem.isWish = eventItem.isWish === true;
   // 舊資料相容：固定團曾經把名單拆成固定參與／本週參與兩份，
   // 現在只用單一 attendees。讀取時併回來，之後一律寫入空陣列。
   const legacyFixed = normalizeUsers_(eventItem.fixedAttendees);
@@ -1077,6 +1085,7 @@ function normalizeEvent_(payload, existingEvent) {
     title: String(source.title || "").trim(),
     datetime: String(source.datetime || ""),
     isFixedGroup: source.isFixedGroup === true || String(source.isFixedGroup).toLowerCase() === "true",
+    isWish: source.isWish === true || String(source.isWish).toLowerCase() === "true",
     fixedTimeText: String(source.fixedTimeText || "").trim(),
     location: String(source.location || "待定"),
     hostName: String(source.hostName || (source.hostUser && source.hostUser.displayName) || ""),
@@ -1491,6 +1500,91 @@ function archiveRetiredEvents() {
   }
 }
 
+/**
+ * 以「日曆天」計算兩個時間相差幾天，忽略時分秒。
+ * 用專案時區換算，所以結算是以台北的日期為準。
+ */
+function getCalendarDayDiff_(fromDate, toDate) {
+  const timeZone = Session.getScriptTimeZone();
+  const from = Utilities.formatDate(fromDate, timeZone, "yyyy-MM-dd");
+  const to = Utilities.formatDate(toDate, timeZone, "yyyy-MM-dd");
+  const toMs = text => {
+    const parts = text.split("-").map(Number);
+    return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+  };
+  return Math.round((toMs(to) - toMs(from)) / 86400000);
+}
+
+/**
+ * 許願活動午夜結算。
+ * 建立後滿 WISH_LIFESPAN_DAYS 個日曆天時：
+ * - 報名人數超過 WISH_MIN_ATTENDEES → 許願成立，取消許願標記轉為一般活動。
+ * - 否則 → 整列硬刪除，**不搬進 EventsArchive**，這是刻意的例外。
+ * 人數只看當下的 attendees，不看歷史紀錄。
+ */
+function cleanupExpiredWishes() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
+  try {
+    const spreadsheet = getSpreadsheet_();
+    const eventsSheet = spreadsheet.getSheetByName(APP_CONFIG.EVENTS_SHEET);
+    if (!eventsSheet || eventsSheet.getLastRow() < 2) return { fulfilled: 0, removed: 0 };
+
+    const headers = eventsSheet.getRange(1, 1, 1, eventsSheet.getLastColumn()).getDisplayValues()[0];
+    const rows = eventsSheet.getRange(2, 1, eventsSheet.getLastRow() - 1, headers.length).getValues();
+    const now = new Date();
+
+    const doomedRowNumbers = [];
+    const fulfilledRows = [];
+
+    rows.forEach((row, index) => {
+      const eventItem = rowToEvent_(headers, row);
+      if (!eventItem.id || eventItem.isWish !== true || isDeletedEvent_(eventItem)) return;
+
+      const createdAt = new Date(eventItem.createdAt);
+      if (isNaN(createdAt.getTime())) return;
+      if (getCalendarDayDiff_(createdAt, now) < APP_CONFIG.WISH_LIFESPAN_DAYS) return;
+
+      if (normalizeUsers_(eventItem.attendees).length > APP_CONFIG.WISH_MIN_ATTENDEES) {
+        eventItem.isWish = false;
+        fulfilledRows.push({ rowNumber: index + 2, event: eventItem });
+      } else {
+        doomedRowNumbers.push({ rowNumber: index + 2, event: eventItem });
+      }
+    });
+
+    fulfilledRows.forEach(item => writeEvent_(eventsSheet, item.rowNumber, item.event));
+
+    // 硬刪除前先移除對應的 Google 日曆行程，否則會留下無主行程。
+    doomedRowNumbers.forEach(item => {
+      if (item.event.calendarEventId) syncToGoogleCalendar_(item.event, "delete");
+    });
+    doomedRowNumbers
+      .map(item => item.rowNumber)
+      .sort((a, b) => b - a)
+      .forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
+
+    SpreadsheetApp.flush();
+    return { fulfilled: fulfilledRows.length, removed: doomedRowNumbers.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function cleanupExpiredWishesFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const result = cleanupExpiredWishes();
+  ui.alert(
+    "許願結算",
+    "許願成立（轉為一般活動）：" + result.fulfilled + " 筆\n" +
+    "人數不足已刪除：" + result.removed + " 筆\n\n" +
+    "結算條件：建立滿 " + APP_CONFIG.WISH_LIFESPAN_DAYS + " 天，" +
+    "當下報名人數需超過 " + APP_CONFIG.WISH_MIN_ATTENDEES + " 人。\n" +
+    "未達標者整列刪除，不會保留到 " + APP_CONFIG.ARCHIVE_SHEET + "。",
+    ui.ButtonSet.OK
+  );
+}
+
 function getOrCreateArchiveSheet_(spreadsheet, headers) {
   let sheet = spreadsheet.getSheetByName(APP_CONFIG.ARCHIVE_SHEET);
   if (!sheet) {
@@ -1510,14 +1604,22 @@ function getOrCreateArchiveSheet_(spreadsheet, headers) {
  * 建立每日歸檔觸發器，重複執行不會產生多個觸發器。
  */
 function installArchiveTrigger_() {
+  const handlers = ["archiveRetiredEvents", "cleanupExpiredWishes"];
   ScriptApp.getProjectTriggers()
-    .filter(trigger => trigger.getHandlerFunction() === "archiveRetiredEvents")
+    .filter(trigger => handlers.indexOf(trigger.getHandlerFunction()) >= 0)
     .forEach(trigger => ScriptApp.deleteTrigger(trigger));
 
   ScriptApp.newTrigger("archiveRetiredEvents")
     .timeBased()
     .everyDays(1)
     .atHour(4)
+    .create();
+
+  // 許願結算在午夜進行，與使用者認知的「半夜十二點」一致。
+  ScriptApp.newTrigger("cleanupExpiredWishes")
+    .timeBased()
+    .everyDays(1)
+    .atHour(0)
     .create();
 }
 

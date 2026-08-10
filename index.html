@@ -906,6 +906,117 @@
       accent-color: #7c3aed;
     }
 
+    .wish-toggle {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .wish-toggle input {
+      width: 20px;
+      height: 20px;
+      accent-color: #1d4ed8;
+    }
+
+    .wish-hint {
+      margin-top: 8px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    /* 許願活動卡片：黑底夜空 + 星星閃爍 */
+    .event-card.is-wish {
+      background: linear-gradient(165deg, #0b1120 0%, #172554 55%, #1e1b4b 100%);
+      border-color: #312e81;
+      overflow: hidden;
+    }
+
+    .event-card.is-wish::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(1.6px 1.6px at 11% 18%, #ffffff, transparent),
+        radial-gradient(1.2px 1.2px at 27% 63%, #e0f2fe, transparent),
+        radial-gradient(1.8px 1.8px at 44% 29%, #ffffff, transparent),
+        radial-gradient(1.1px 1.1px at 61% 74%, #bfdbfe, transparent),
+        radial-gradient(1.5px 1.5px at 73% 21%, #ffffff, transparent),
+        radial-gradient(1.2px 1.2px at 86% 56%, #e0f2fe, transparent),
+        radial-gradient(1.3px 1.3px at 34% 88%, #ffffff, transparent),
+        radial-gradient(1px 1px at 93% 84%, #bfdbfe, transparent),
+        radial-gradient(1.4px 1.4px at 17% 45%, #ffffff, transparent),
+        radial-gradient(1.1px 1.1px at 55% 8%, #e0f2fe, transparent);
+      animation: wish-twinkle 3.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes wish-twinkle {
+      from { opacity: 0.35; }
+      to   { opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .event-card.is-wish::before { animation: none; opacity: 0.8; }
+    }
+
+    .event-card.is-wish > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 卡片各層原本都有白底，會蓋掉星空，全部改為透明。 */
+    .event-card.is-wish .card-summary-bar,
+    .event-card.is-wish .card-summary-bar:active,
+    .event-card.is-wish.is-expanded .card-summary-bar {
+      background: transparent;
+      border-bottom-color: rgba(148, 163, 184, 0.35);
+    }
+
+    .event-card.is-wish .card-info {
+      background: rgba(15, 23, 42, 0.35);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+
+    .event-card.is-wish .event-summary-title,
+    .event-card.is-wish .card-title,
+    .event-card.is-wish .card-info,
+    .event-card.is-wish .info-row span,
+    .event-card.is-wish .expand-icon {
+      color: #e2e8f0;
+    }
+
+    .event-card.is-wish .info-label {
+      color: #94a3b8;
+    }
+
+    .event-card.is-wish .event-time-chip {
+      background: rgba(226, 232, 240, 0.16);
+      color: #e2e8f0;
+    }
+
+    .event-card.is-wish .attendee-pill {
+      background: rgba(226, 232, 240, 0.14);
+      color: #e2e8f0;
+      border-color: rgba(226, 232, 240, 0.3);
+    }
+
+    .tag-wish {
+      background: #1e1b4b;
+      color: #c7d2fe;
+      border: 1px solid #4338ca;
+    }
+
     .fixed-time-field {
       display: none;
     }
@@ -1158,7 +1269,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-10T12:59:00+08:00">v260810.1259</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-10T13:25:14+08:00">v260810.1325</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1286,10 +1397,20 @@
           <div class="form-group">
             <div class="form-label-row">
               <div class="form-label">日期與時間 *</div>
-              <label id="fixed-group-control" class="fixed-group-toggle" for="input-is-fixed">
-                <input type="checkbox" id="input-is-fixed">
-                <span>固定團</span>
-              </label>
+              <span style="display:flex; gap:12px; align-items:center; flex-shrink:0;">
+                <label id="fixed-group-control" class="fixed-group-toggle" for="input-is-fixed">
+                  <input type="checkbox" id="input-is-fixed">
+                  <span>固定團</span>
+                </label>
+                <label id="wish-control" class="wish-toggle" for="input-is-wish">
+                  <input type="checkbox" id="input-is-wish">
+                  <span>許願</span>
+                </label>
+              </span>
+            </div>
+            <div id="wish-hint" class="wish-hint" style="display:none;">
+              許願活動會在列表上特別標記。建立滿 3 天的午夜結算時，
+              報名人數若沒有超過 3 人就會自動刪除，且不保留紀錄。
             </div>
             <div id="input-standard-time" class="datetime-picker-grid">
               <label class="datetime-picker-field">
@@ -1555,7 +1676,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260810.1259", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260810.1325", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1688,6 +1809,32 @@
       ));
     }
 
+    function isWishEvent(evt) {
+      return Boolean(evt && (
+        evt.isWish === true ||
+        String(evt.isWish || "").toLowerCase() === "true"
+      ));
+    }
+
+    // 許願結算以日曆天計算，與 GAS 的 getCalendarDayDiff_ 一致。
+    function getWishDaysLeft(evt) {
+      if (!isWishEvent(evt)) return null;
+      const created = parseSafeDate(evt.createdAt);
+      if (isNaN(created.getTime())) return null;
+      const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const elapsed = Math.round((startOfDay(new Date()) - startOfDay(created)) / 86400000);
+      return Math.max(0, WISH_LIFESPAN_DAYS - elapsed);
+    }
+
+    function getWishStatusText(evt) {
+      const daysLeft = getWishDaysLeft(evt);
+      const shortfall = WISH_MIN_ATTENDEES + 1 - (evt.attendees || []).length;
+      const whenText = daysLeft === 0 ? "今晚結算" : `${daysLeft} 天後結算`;
+      return shortfall > 0
+        ? `${whenText}，還差 ${shortfall} 人才成立`
+        : `${whenText}，人數已達標`;
+    }
+
     function isFixedGroup(evt) {
       return Boolean(evt && (
         evt.isFixedGroup === true ||
@@ -1713,6 +1860,10 @@
       evt.weeklyAttendees = [];
       return evt;
     }
+
+    // 與 GAS 的 WISH_LIFESPAN_DAYS / WISH_MIN_ATTENDEES 一致。
+    const WISH_LIFESPAN_DAYS = 3;
+    const WISH_MIN_ATTENDEES = 3;
 
     // 與 GAS 的 EVENT_GRACE_MS 一致：結束後 2 小時才算過期，
     // 活動進行中仍看得到。固定團永遠不會過期。
@@ -2092,6 +2243,28 @@
       control.title = isSupported ? "" : "請先將 GAS 表格更新為版本 2";
       if (labelText) labelText.textContent = isSupported ? "固定團" : "固定團（需更新）";
       if (!isSupported) setCreateFixedMode(false);
+      updateWishAvailability();
+    }
+
+    // 許願需要 isWish 欄位，表格結構版本至少要 4。
+    function updateWishAvailability() {
+      const control = document.getElementById("wish-control");
+      if (!control) return;
+      const isSupported = isDevMode || Number(serverSchemaVersion) >= 4;
+      const checkbox = document.getElementById("input-is-wish");
+      const labelText = control.querySelector("span");
+      control.style.display = "inline-flex";
+      checkbox.disabled = !isSupported;
+      control.title = isSupported ? "" : "請先將 GAS 表格更新為版本 4";
+      if (labelText) labelText.textContent = isSupported ? "許願" : "許願（需更新）";
+      if (!isSupported) setCreateWishMode(false);
+    }
+
+    function setCreateWishMode(enabled) {
+      const checkbox = document.getElementById("input-is-wish");
+      const hint = document.getElementById("wish-hint");
+      checkbox.checked = Boolean(enabled);
+      if (hint) hint.style.display = enabled ? "block" : "none";
     }
 
     function setCreateFixedMode(enabled) {
@@ -2842,12 +3015,18 @@
         let tagClass = "tag-open";
         let tagText = "揪團中";
         
+        const wishEvent = isWishEvent(evt);
         if (fixedGroup) {
           tagClass = "tag-fixed";
           tagText = "固定團";
         } else if (isEnded) {
           tagClass = "tag-ended";
           tagText = "已過期";
+        } else if (wishEvent) {
+          // 標籤要短，否則會把摺疊標題擠掉；詳細狀態放在展開內容裡。
+          const daysLeft = getWishDaysLeft(evt);
+          tagClass = "tag-wish";
+          tagText = daysLeft === 0 ? "許願 · 今晚" : `許願 · 剩${daysLeft}天`;
         } else if (isFull) {
           tagClass = "tag-full";
           tagText = "揪團已滿";
@@ -2858,7 +3037,7 @@
         const isExpanded = expandedEventIds.has(evt.id);
 
         const cardEl = document.createElement("div");
-        cardEl.className = `event-card ${isEnded ? 'ended' : ''} ${isExpanded ? 'is-expanded' : ''}`;
+        cardEl.className = `event-card ${isEnded ? 'ended' : ''} ${isExpanded ? 'is-expanded' : ''} ${wishEvent ? 'is-wish' : ''}`;
 
         let actionButtonsHtml = "";
         if (fixedGroup) {
@@ -2914,6 +3093,10 @@
                 <span class="info-label">人數：</span>
                 <span style="color:var(--line-green-dark); font-weight:bold;">${evt.attendees.length}${maxCap > 0 ? '/' + maxCap : ''} 人</span>
               </div>
+              ${wishEvent ? `<div class="info-row">
+                <span class="info-label">許願：</span>
+                <span>${getWishStatusText(evt)}</span>
+              </div>` : ""}
             </div>
 
             <div class="card-actions ${fixedGroup ? "fixed-actions" : ""}">
@@ -3117,11 +3300,19 @@ ${pageUrl}`;
         return;
       }
 
+      // 固定團沒有明確日期，無法做三天結算，因此兩者互斥。
+      const wishEvent = !fixedGroup && document.getElementById("input-is-wish").checked;
+      if (wishEvent && !isDevMode && Number(serverSchemaVersion) < 4) {
+        alert("許願功能的資料庫尚未完成更新，請稍後再試。");
+        return;
+      }
+
       const newEvent = {
         id: "evt_" + Date.now(),
         title: document.getElementById("input-title").value.trim(),
         datetime: fixedGroup ? "" : getDateTimePickerValue("input"),
         isFixedGroup: fixedGroup,
+        isWish: wishEvent,
         fixedTimeText: fixedGroup ? fixedTimeText : "",
         location: normalizeLocation(document.getElementById("input-location").value),
         fee: document.getElementById("input-fee").value.trim() || "免費",
@@ -3138,7 +3329,7 @@ ${pageUrl}`;
         history: []
       };
 
-      addHistoryLog(newEvent, fixedGroup ? "建立固定團並成為主揪" : "建立活動並成為主揪", "create");
+      addHistoryLog(newEvent, fixedGroup ? "建立固定團並成為主揪" : (wishEvent ? "發起許願並成為主揪" : "建立活動並成為主揪"), "create");
       expandedEventIds.add(newEvent.id);
 
       eventsData.push(newEvent);
@@ -3158,6 +3349,7 @@ ${pageUrl}`;
       closeModal("modal-create");
       document.getElementById("form-create-event").reset();
       setCreateFixedMode(false);
+      setCreateWishMode(false);
 
       triggerAutoCopyAndAlert(newEvent, "create");
     });
@@ -3660,8 +3852,15 @@ ${getShareableUrl()}`;
 
     // --- 18. EVENT LISTENERS ---
     function setupEventListeners() {
+      // 固定團與許願互斥：固定團沒有明確日期，無法做三天結算。
       document.getElementById("input-is-fixed").onchange = event => {
         setCreateFixedMode(event.target.checked);
+        if (event.target.checked) setCreateWishMode(false);
+      };
+
+      document.getElementById("input-is-wish").onchange = event => {
+        setCreateWishMode(event.target.checked);
+        if (event.target.checked) setCreateFixedMode(false);
       };
 
       document.getElementById("fab-add-event").onclick = () => {
