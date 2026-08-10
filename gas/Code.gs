@@ -1486,9 +1486,18 @@ function archiveRetiredEvents() {
     }
 
     const archiveSheet = getOrCreateArchiveSheet_(spreadsheet, headers);
+    // 兩張表的欄序不一定相同（ensureHeaders_ 是往右補），
+    // 因此依歸檔表自己的表頭重新排列每一列，避免欄位錯位。
+    const archiveHeaders = archiveSheet
+      .getRange(1, 1, 1, archiveSheet.getLastColumn()).getDisplayValues()[0];
+    const alignedRows = retiredRows.map(row => {
+      const byHeader = {};
+      headers.forEach((header, index) => { if (header) byHeader[header] = row[index]; });
+      return archiveHeaders.map(header => (header in byHeader) ? byHeader[header] : "");
+    });
     archiveSheet
-      .getRange(archiveSheet.getLastRow() + 1, 1, retiredRows.length, headers.length)
-      .setValues(retiredRows);
+      .getRange(archiveSheet.getLastRow() + 1, 1, alignedRows.length, archiveHeaders.length)
+      .setValues(alignedRows);
 
     // 由下往上刪，避免刪除後列號位移。
     retiredRowNumbers.slice().reverse().forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
@@ -1585,18 +1594,18 @@ function cleanupExpiredWishesFromMenu() {
   );
 }
 
+/**
+ * 取得歸檔表，並確保它的表頭與傳入的欄位一致。
+ * 之前只在空表時寫表頭，導致 Events 後來新增欄位（例如 isWish）後，
+ * 已有資料的歸檔表仍停在舊欄數，搬進來的列會與表頭錯位。
+ */
 function getOrCreateArchiveSheet_(spreadsheet, headers) {
   let sheet = spreadsheet.getSheetByName(APP_CONFIG.ARCHIVE_SHEET);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(APP_CONFIG.ARCHIVE_SHEET);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    formatHeader_(sheet, headers.length, "#94a3b8");
-    return sheet;
   }
-  if (sheet.getLastRow() < 1) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    formatHeader_(sheet, headers.length, "#94a3b8");
-  }
+  ensureHeaders_(sheet, headers);
+  formatHeader_(sheet, headers.length, "#94a3b8");
   return sheet;
 }
 

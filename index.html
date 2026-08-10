@@ -1261,7 +1261,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-10T14:02:20+08:00">v260810.1402</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-10T14:13:13+08:00">v260810.1413</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1669,7 +1669,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260810.1402", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260810.1413", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -3767,21 +3767,12 @@ ${getShareableUrl()}`;
               return;
             }
 
-            if (isDevMode) {
-              alert("本機測試：活動已標記為刪除。");
-              return;
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            const verified = await runBackgroundSync();
-            const stillExists = eventsData.some(eventItem => eventItem.id === eventId);
-            if (verified && !stillExists) {
-              alert("活動已從雲端刪除。");
-            } else if (verified) {
-              alert("雲端仍有這筆活動，GAS 的 deleteEvent 尚未正確更新 Sheet 刪除狀態。");
-            } else {
-              alert("刪除指令已送出，但目前無法連線確認 Sheet 狀態。");
-            }
+            // sendPostToGAS 已檢查過 GAS 回應的 status，走到這裡就代表雲端確實
+            // 處理完成；失敗會在上面回滾。不再另外做一次驗證同步 ——
+            // runBackgroundSync() 在「有其他寫入進行中」「頁面在背景」「GET 逾時」
+            // 時都會回 false，那三種都不代表刪除失敗，卻會誤報成 Sheet 連線有問題。
+            showToast("活動已刪除");
+            runBackgroundSync();
           }
         };
       } else {

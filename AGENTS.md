@@ -143,6 +143,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - 許願活動未達標時整列硬刪除，是唯一不進 `EventsArchive` 的例外，見〈許願活動〉。
 - `doGet` 只回傳仍需顯示的活動，已刪除與已過期一律不送（`isRetiredEvent_()`）。不得恢復 `includeDeleted` 參數，那會讓任何拿到 `/exec` 網址的人取得已刪除活動的成員名單。
 - 已刪除與過期活動由每日觸發器 `archiveRetiredEvents()` 搬到 `EventsArchive`，並從 `Events` 移除該列。固定團與時間無法解析的活動一律不搬。
+- 搬進歸檔表前必須**依歸檔表自己的表頭重排每一列**。`ensureHeaders_` 是往右補欄位，所以兩張表的欄序不保證相同；直接照 `Events` 的順序寫入會造成欄位錯位。
 
 過期定義為活動開始時間加 `EVENT_GRACE_MS`（2 小時），前後端必須一致，活動進行中仍要看得到。
 
@@ -160,6 +161,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - 「重新整理」按鈕是資料同步，不等於強制重載 HTML。前端版本變更由 `version.json` 自動偵測。
 - 保留 `localMutationRevision`、`pendingMutationCount` 與遠端請求合併邏輯，不可讓較早回應覆蓋使用者剛完成的操作。
 - 前端先更新畫面的操作，若 GAS 寫入失敗，必須回滾本機畫面，不可讓使用者誤以為雲端已完成。
+- **不要用 `runBackgroundSync()` 的回傳值判斷寫入成功與否。** 它在「有其他寫入進行中」「頁面在背景」「GET 逾時」時都會回 `false`，三者都不代表寫入失敗。寫入結果一律以 `sendPostToGAS` 的 `ok` 為準，那已經檢查過 GAS 回應的 `status`。
 - `sendPostToGAS` 回傳 `{ ok, message }`。**每一個呼叫點都必須處理 `ok === false`**：用 `snapshotEventState()` 事前存檔、失敗時呼叫 `rollbackEventState()` 還原並顯示 GAS 的錯誤訊息。射後不理會讓使用者看到假成功，重新整理後才發現變更消失。
 - 寫入逾時使用 `CONFIG.WRITE_TIMEOUT_MS`。GAS 儲存活動時要同步 Google 日曆，逾時設太短會把已成功的寫入誤判為失敗而回滾。
 - 地圖短網址失敗結果在目前頁面會有記憶體快取；更新 GAS 後要完整關閉並重開 LINE 網頁再檢查。
