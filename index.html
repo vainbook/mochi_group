@@ -1343,7 +1343,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-12T17:29:36+08:00">v260812.1729</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-12T18:12:38+08:00">v260812.1812</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1754,12 +1754,16 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260812.1729", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260812.1812", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
       VERSION_MANIFEST_URL: "version.json",
-      DATA_SYNC_INTERVAL_MS: 20000,
+      // GAS 變慢的真正原因是併發請求排隊，不是單次請求慢。
+      // 實測（2026-08-12）：6 個請求同時打進去，每個腳本內部只跑 1.2～2.1 秒，
+      // 但 HTTP 要等 25～77 秒。所以降低「請求次數」才有效，加快單次沒有用。
+      // 每位使用者每 60 秒一次；切換回前景、重新連線與自己的寫入都會另外立刻同步。
+      DATA_SYNC_INTERVAL_MS: 60000,
       // GAS 讀取已改成幾乎全部命中快取（約 1～3 秒）。逾時值不可再放到幾十秒，
       // 否則單一次卡住的請求會讓畫面等將近一分鐘；直接放棄、下一輪同步重試更快。
       READ_TIMEOUT_MS: 20000,
@@ -2260,6 +2264,21 @@
       }
     }
 
+    // 用會抖動的 setTimeout 取代固定 setInterval：固定間隔會讓所有開著頁面的人
+    // 對齊在同一秒送出請求，那正是把 GAS 推進排隊的原因。每次隨機 ±25%。
+    function scheduleNextBackgroundSync() {
+      const base = CONFIG.DATA_SYNC_INTERVAL_MS;
+      const delay = Math.round(base * (0.75 + Math.random() * 0.5));
+      setTimeout(async () => {
+        try {
+          await runBackgroundSync();
+        } catch (error) {
+          console.warn("Background sync warning:", error);
+        }
+        scheduleNextBackgroundSync();
+      }, delay);
+    }
+
     function scheduleImmediateAutomaticUpdate() {
       clearTimeout(automaticUpdateDebounceTimer);
       automaticUpdateDebounceTimer = setTimeout(() => {
@@ -2276,7 +2295,7 @@
 
       checkForAppUpdate();
       retryPendingMutations();
-      setInterval(() => runBackgroundSync(), CONFIG.DATA_SYNC_INTERVAL_MS);
+      scheduleNextBackgroundSync();
       setInterval(() => checkForAppUpdate(), CONFIG.VERSION_CHECK_INTERVAL_MS);
 
       document.addEventListener("visibilitychange", () => {

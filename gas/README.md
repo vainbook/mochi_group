@@ -105,7 +105,8 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 
 ## 同步與權限規則
 
-- `doGet` 命中 Script Cache 就直接回傳（約 1～3 秒）；沒命中才開啟 Sheet 重建（實測 8～30 秒，取決於試算表大小與當下負載）。快取 TTL 一小時。
+- `doGet` 命中 Script Cache 就直接回傳；沒命中才開啟 Sheet 重建。快取 TTL 一小時。實測腳本內部耗時：開試算表 0.33 秒、讀全表加組資料 0.50 秒，也就是快取省下的大約 1 秒。
+- **回應很久（十幾秒到一分鐘）幾乎都不是腳本慢，是 Apps Script 把併發請求排隊。** 實測 6 個請求同時進來，腳本各自只跑 1.2～2.1 秒，HTTP 卻等了 25～77 秒。要解決只能減少請求次數（前端 `DATA_SYNC_INTERVAL_MS`），加快單次沒有用。
 - 任何成功寫入、歸檔或許願結算都會**當場重建快取**（`refreshPublicPayloadCacheQuietly_`），不是只清除，所以新的報名結果會立刻生效，且下一位讀取者不必幫大家付重建的時間。另有 15 分鐘一次的 `warmPublicPayloadCache` 負責補上快取被系統提早清掉的情形。
 - 每個 POST 只開啟一次 Spreadsheet，再取得 `Events` 與 `AuditLog`。mutationId 先查六小時快取，再檢查 AuditLog 最近 500 列，降低長期稽核資料造成的延遲。
 - `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
