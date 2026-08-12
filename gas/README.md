@@ -104,6 +104,8 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 
 ## 同步與權限規則
 
+- `doGet` 會將公開活動回應放入 20 秒 Script Cache；任何成功寫入、歸檔或許願結算都會立即清除，因此快取不會蓋住新的報名結果。Cache 只是加速層，遺失時會直接讀取 Sheet。
+- 每個 POST 只開啟一次 Spreadsheet，再取得 `Events` 與 `AuditLog`。mutationId 先查六小時快取，再檢查 AuditLog 最近 500 列，降低長期稽核資料造成的延遲。
 - `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
 - 許願活動（`isWish = TRUE`）由午夜觸發器 `cleanupExpiredWishes` 結算：建立滿 3 個日曆天時，當下報名人數超過 3 人則轉為一般活動，否則整列硬刪除且不進 `EventsArchive`。刪除前會先移除對應的 Google 日曆行程。
 - `addComment`：在活動紀錄新增一則留言，任何已登入成員都可以。內容由 GAS 重新組裝並限制 150 字，不採用前端送來的 history 條目。
@@ -115,6 +117,9 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 - 主揪不能直接退出，必須先交棒給已報名成員；GAS 也會再次驗證交棒對象。
 - `mutationId` 已處理過時會直接回覆成功，不會再執行一次。
 - 所有寫入都使用 Script Lock，避免手機與電腦同時操作造成覆蓋。
+- 前端普通操作會先保存在本機 pending queue，再依序送出；關閉頁面時使用 keepalive，若仍被 LINE 中斷，下次開啟會沿用同一個 mutationId 重試，所以 GAS 不會重複報名。pending queue 最多 20 筆並保留 24 小時。
+- 舊版 LINE WebView 不支援 keepalive 時會自動改用一般請求；只要網站資料未被清除，未確認的普通操作仍會在同一台裝置下次開啟時補送。其他裝置不會共享這份 queue。
+- 管理員密碼不會寫入 pending queue，而且前端只有真的要管理別人的活動時才附上密碼。因此含管理員密碼的操作關閉頁面後不能自動重送，只能依靠當次 keepalive，重新開啟後再由雲端資料確認結果。
 
 ## Google 日曆連動規則
 

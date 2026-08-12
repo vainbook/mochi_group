@@ -1343,7 +1343,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-12T15:05:21+08:00">v260812.1505</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-12T16:13:47+08:00">v260812.1613</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1754,16 +1754,21 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260812.1505", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260812.1613", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
       VERSION_MANIFEST_URL: "version.json",
       DATA_SYNC_INTERVAL_MS: 12000,
-      WRITE_TIMEOUT_MS: 20000,
+      READ_TIMEOUT_MS: 45000,
+      WRITE_TIMEOUT_MS: 60000,
       VERSION_CHECK_INTERVAL_MS: 60000,
       STORAGE_KEY: "line_events_v6",
-      USER_CACHE_KEY: "line_user_profile_v2"
+      USER_CACHE_KEY: "line_user_profile_v2",
+      PENDING_MUTATIONS_KEY: "line_pending_mutations_v1",
+      PENDING_MUTATION_MAX_AGE_MS: 24 * 60 * 60 * 1000,
+      PENDING_MUTATION_MAX_COUNT: 20,
+      KEEPALIVE_MAX_BYTES: 60000
     };
 
     // DEV Mock Profiles
@@ -1794,6 +1799,8 @@
     let serverCalendarInfo = null;
     let automaticUpdatesStarted = false;
     let automaticUpdateDebounceTimer = null;
+    let mutationSendChain = Promise.resolve();
+    let pendingMutationRetryInFlight = null;
     const processingRSVPEventIds = new Set();
     const processingHighlightEventIds = new Set();
     const locationResolveCache = new Map();
@@ -2161,6 +2168,10 @@
           updateSyncBadge(`已同步 ${getSyncTimeText()}`, true);
           setSyncClockPrompt("done", "已成功連動最新雲端資料");
           setTimeout(() => setSyncClockPrompt("hide"), 1200);
+        } else if (hasPendingMutationForActiveProfile()) {
+          updateSyncBadge("等待雲端確認", false);
+          setSyncClockPrompt("syncing", "正在確認上次尚未完成的操作...");
+          setTimeout(() => setSyncClockPrompt("hide"), 2400);
         } else {
           updateSyncBadge("離線資料", false);
           setSyncClockPrompt("offline", "目前顯示本機資料，網路恢復後會自動同步");
@@ -2189,6 +2200,8 @@
       if (isSuccess) {
         renderEvents();
         updateSyncBadge(`已同步 ${getSyncTimeText()}`, true);
+      } else if (hasPendingMutationForActiveProfile()) {
+        updateSyncBadge("等待雲端確認", false);
       } else {
         updateSyncBadge("離線資料", false);
       }
@@ -2217,12 +2230,17 @@
       setSyncClockPrompt("syncing", "正在重新整理最新活動...");
 
       try {
+        if (hasPendingMutationForActiveProfile()) await retryPendingMutations();
         const isSuccess = await fetchRemoteDataFromGAS();
         renderEvents();
         if (isSuccess) {
           refreshBtn.innerText = "已更新";
           updateSyncBadge(`已同步 ${getSyncTimeText()}`, true);
           setSyncClockPrompt("done", "已成功連動最新雲端資料");
+        } else if (hasPendingMutationForActiveProfile()) {
+          refreshBtn.innerText = "等待確認";
+          updateSyncBadge("等待雲端確認", false);
+          setSyncClockPrompt("syncing", "雲端仍在確認上次操作");
         } else {
           refreshBtn.innerText = "更新失敗";
           updateSyncBadge("離線資料", false);
@@ -2252,14 +2270,24 @@
       automaticUpdatesStarted = true;
 
       checkForAppUpdate();
+      retryPendingMutations();
       setInterval(() => runBackgroundSync(), CONFIG.DATA_SYNC_INTERVAL_MS);
       setInterval(() => checkForAppUpdate(), CONFIG.VERSION_CHECK_INTERVAL_MS);
 
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") scheduleImmediateAutomaticUpdate();
+        if (document.visibilityState === "visible") {
+          retryPendingMutations();
+          scheduleImmediateAutomaticUpdate();
+        }
       });
-      window.addEventListener("focus", scheduleImmediateAutomaticUpdate);
-      window.addEventListener("online", scheduleImmediateAutomaticUpdate);
+      window.addEventListener("focus", () => {
+        retryPendingMutations();
+        scheduleImmediateAutomaticUpdate();
+      });
+      window.addEventListener("online", () => {
+        retryPendingMutations();
+        scheduleImmediateAutomaticUpdate();
+      });
     }
 
     function checkForAppUpdate() {
@@ -2612,6 +2640,8 @@
 
     // --- 4. GOOGLE SHEETS / GAS API SYNC (DEFENSIVE PARSING & TIMEOUT) ---
     function fetchRemoteDataFromGAS() {
+      // 尚有未確認操作時先完成同 mutationId 重試，避免舊 GET 把畫面蓋回去。
+      if (hasPendingMutationForActiveProfile()) return Promise.resolve(false);
       if (remoteFetchInFlight) return remoteFetchInFlight;
       remoteFetchInFlight = performRemoteDataFetch()
         .finally(() => { remoteFetchInFlight = null; });
@@ -2623,8 +2653,8 @@
 
       const revisionAtStart = localMutationRevision;
       const controller = new AbortController();
-      // Apps Script 冷啟動可能超過數秒；畫面已先解除等待，讓同步留在背景完成。
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      // Apps Script 冷啟動可能超過 15 秒；畫面已先解除等待，讓同步留在背景完成。
+      const timeoutId = setTimeout(() => controller.abort(), CONFIG.READ_TIMEOUT_MS);
 
       try {
         const requestUrl = new URL(CONFIG.GAS_API_URL);
@@ -2702,6 +2732,12 @@
 
           saveLocalEvents();
 
+          // 若詳情視窗在同步完成前就開啟，要立即重繪按鈕狀態，
+          // 否則 schema 已更新仍會暫時顯示「需更新」。
+          if (isDetailModalOpen() && activeEventId && eventsData.some(item => item.id === activeEventId)) {
+            openDetailModal(activeEventId);
+          }
+
           return true;
         }
       } catch (err) {
@@ -2736,74 +2772,232 @@
     }
 
     function describePostFailure(error) {
-      if (error && error.name === "AbortError") return "雲端回應逾時，變更沒有存檔。請稍後再試一次。";
+      if (error && error.name === "AbortError") return "雲端回應較慢，操作已保留並會自動重試。";
       const message = String((error && error.message) || "").trim();
-      return message || "無法連線雲端，變更沒有存檔。";
+      return message || "暫時無法確認雲端結果，操作已保留並會自動重試。";
     }
 
-    async function sendPostToGAS(payload) {
-      localMutationRevision += 1;
-      // 本機測試模式只驗證操作反應，不寫入正式資料。
-      if (isDevMode) return { ok: true, message: "" };
-      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) {
-        return { ok: false, message: "尚未設定雲端連線網址。" };
+    function loadPendingMutations() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(CONFIG.PENDING_MUTATIONS_KEY) || "[]");
+        const now = Date.now();
+        return (Array.isArray(parsed) ? parsed : [])
+          .filter(item => item && item.payload && item.payload.mutationId)
+          .filter(item => !item.payload.adminPassword)
+          .filter(item => now - Number(item.createdAt || 0) <= CONFIG.PENDING_MUTATION_MAX_AGE_MS)
+          .slice(-CONFIG.PENDING_MUTATION_MAX_COUNT);
+      } catch (error) {
+        return [];
       }
+    }
 
+    function savePendingMutations(items) {
+      try {
+        const safeItems = (Array.isArray(items) ? items : [])
+          .filter(item => item && item.payload && !item.payload.adminPassword)
+          .slice(-CONFIG.PENDING_MUTATION_MAX_COUNT);
+        localStorage.setItem(CONFIG.PENDING_MUTATIONS_KEY, JSON.stringify(safeItems));
+        return true;
+      } catch (error) {
+        console.warn("Pending mutation storage failed:", error);
+        return false;
+      }
+    }
+
+    function persistPendingMutation(requestPayload) {
+      // 管理員密碼絕不可寫入 localStorage；這類操作只使用 keepalive 傳送。
+      if (!requestPayload || requestPayload.adminPassword) return false;
+      const items = loadPendingMutations();
+      const existingIndex = items.findIndex(item =>
+        String(item.payload.mutationId) === String(requestPayload.mutationId)
+      );
+      const entry = {
+        payload: requestPayload,
+        createdAt: existingIndex >= 0 ? items[existingIndex].createdAt : Date.now(),
+        attempts: existingIndex >= 0 ? Number(items[existingIndex].attempts || 0) : 0,
+        lastAttemptAt: existingIndex >= 0 ? Number(items[existingIndex].lastAttemptAt || 0) : 0
+      };
+      if (existingIndex >= 0) items[existingIndex] = entry;
+      else items.push(entry);
+      return savePendingMutations(items);
+    }
+
+    function markPendingMutationAttempt(mutationId) {
+      const items = loadPendingMutations();
+      const item = items.find(entry => String(entry.payload.mutationId) === String(mutationId));
+      if (!item) return;
+      item.attempts = Number(item.attempts || 0) + 1;
+      item.lastAttemptAt = Date.now();
+      savePendingMutations(items);
+    }
+
+    function removePendingMutation(mutationId) {
+      const items = loadPendingMutations().filter(item =>
+        String(item.payload.mutationId) !== String(mutationId)
+      );
+      savePendingMutations(items);
+    }
+
+    function hasPendingMutationForActiveProfile() {
+      let activeUserId = String(currentUser?.userId || "");
+      if (!activeUserId) {
+        try {
+          const cachedProfile = JSON.parse(localStorage.getItem(CONFIG.USER_CACHE_KEY) || "null");
+          activeUserId = String(cachedProfile?.userId || "");
+        } catch (error) {}
+      }
+      if (!activeUserId) return false;
+      return loadPendingMutations().some(item =>
+        String(item.payload.actorUserId || "") === activeUserId
+      );
+    }
+
+    function buildMutationPayload(payload) {
+      return {
+        ...payload,
+        mutationId: payload.mutationId || `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        actorUserId: payload.actorUserId || currentUser?.userId || "",
+        actorName: payload.actorName || currentUser?.displayName || "",
+        clientVersion: CONFIG.APP_VERSION
+      };
+    }
+
+    function queueMutationTask(task) {
+      const result = mutationSendChain.then(task, task);
+      mutationSendChain = result.then(() => undefined, () => undefined);
+      return result;
+    }
+
+    async function postPreparedMutation(requestPayload, options = {}) {
       pendingMutationCount += 1;
-      updateSyncBadge("同步變更中...", false);
+      updateSyncBadge(options.isRetry ? "重試同步中..." : "同步變更中...", false);
       const controller = new AbortController();
-      // 儲存活動時 GAS 需同步 Google 日曆，逾時要留足夠餘裕，
-      // 否則前端會誤判失敗而回滾一筆其實已經寫入的變更。
       const timeoutId = setTimeout(() => controller.abort(), CONFIG.WRITE_TIMEOUT_MS);
+      const requestBody = JSON.stringify(requestPayload);
+      const requestBytes = typeof Blob === "function"
+        ? new Blob([requestBody]).size
+        : requestBody.length * 3;
+      const useKeepalive = requestBytes <= CONFIG.KEEPALIVE_MAX_BYTES;
+      const fetchOptions = {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: requestBody,
+        redirect: "follow",
+        cache: "no-store",
+        signal: controller.signal
+      };
 
       try {
-        const requestPayload = {
-          ...payload,
-          mutationId: payload.mutationId || `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          actorUserId: payload.actorUserId || currentUser?.userId || "",
-          actorName: payload.actorName || currentUser?.displayName || "",
-          ...(["deleteEvent", "saveEvent", "toggleHighlight"].includes(payload.action) && currentUserCanDeleteAnyEvent
-            ? { adminPassword: currentAdminPassword }
-            : {}),
-          clientVersion: CONFIG.APP_VERSION
-        };
+        markPendingMutationAttempt(requestPayload.mutationId);
         const requestUrl = new URL(CONFIG.GAS_API_URL);
         requestUrl.searchParams.set("_ts", String(Date.now()));
-        const res = await fetch(requestUrl.toString(), {
-          method: "POST",
-          headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify(requestPayload),
-          redirect: "follow",
-          cache: "no-store",
-          signal: controller.signal
-        });
-        if (!res.ok) throw new Error(`GAS POST ${res.status}`);
-        const responseText = await res.text();
-        if (responseText.trim()) {
-          try {
-            const responseData = JSON.parse(responseText);
-            if (responseData.status && !["success", "ok"].includes(String(responseData.status).toLowerCase())) {
-              throw new Error(responseData.message || "GAS reported an error");
-            }
-          } catch (parseError) {
-            if (parseError instanceof SyntaxError) {
-              console.warn("GAS POST returned non-JSON response");
-            } else {
-              throw parseError;
-            }
-          }
+        let res;
+        try {
+          // 小型請求可在頁面關閉後繼續；超過瀏覽器 keepalive 上限時自動停用。
+          res = await fetch(requestUrl.toString(), { ...fetchOptions, keepalive: useKeepalive });
+        } catch (keepaliveError) {
+          if (!useKeepalive || controller.signal.aborted) throw keepaliveError;
+          // 部分舊版 LINE WebView 不支援 fetch keepalive；同一 mutationId 改用一般請求重試。
+          // 即使前一次其實已送達，GAS 端也會用 mutationId 擋掉重複寫入。
+          res = await fetch(requestUrl.toString(), fetchOptions);
         }
+        if (!res.ok) {
+          const httpError = new Error(`GAS POST ${res.status}`);
+          httpError.definitive = res.status >= 400 && res.status < 500;
+          throw httpError;
+        }
+
+        const responseText = await res.text();
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (parseError) {
+          throw new Error("GAS 回傳格式暫時無法確認");
+        }
+        if (!responseData || !["success", "ok"].includes(String(responseData.status || "").toLowerCase())) {
+          const gasError = new Error((responseData && responseData.message) || "GAS reported an error");
+          gasError.definitive = true;
+          throw gasError;
+        }
+
+        removePendingMutation(requestPayload.mutationId);
         updateSyncBadge("變更已送出", true);
         setTimeout(() => runBackgroundSync(), 1200);
-        return { ok: true, message: "" };
+        return { ok: true, pending: false, message: "" };
       } catch (err) {
         console.warn("GAS POST fallback:", err);
-        updateSyncBadge("變更尚未同步", false);
-        return { ok: false, message: describePostFailure(err) };
+        if (err && err.definitive) {
+          removePendingMutation(requestPayload.mutationId);
+          updateSyncBadge("變更同步失敗", false);
+          return { ok: false, pending: false, message: describePostFailure(err) };
+        }
+
+        // 網路中斷與逾時無法判斷 GAS 是否已寫入；保留同一 mutationId 重試，
+        // 不回滾畫面，避免「其實成功卻顯示失敗」。
+        updateSyncBadge("等待雲端確認", false);
+        if (!options.isRetry) setTimeout(() => retryPendingMutations(), 5000);
+        const persisted = loadPendingMutations().some(item =>
+          String(item.payload.mutationId) === String(requestPayload.mutationId)
+        );
+        if (!options.isRetry) {
+          showToast(persisted
+            ? "操作已保留，雲端會自動確認"
+            : "雲端結果待確認，請稍後重新整理");
+        }
+        return {
+          ok: true,
+          pending: true,
+          message: describePostFailure(err),
+          persisted: persisted
+        };
       } finally {
         pendingMutationCount = Math.max(0, pendingMutationCount - 1);
         clearTimeout(timeoutId);
       }
+    }
+
+    async function retryPendingMutations() {
+      if (isDevMode || !currentUser || pendingMutationRetryInFlight || navigator.onLine === false) {
+        return pendingMutationRetryInFlight || false;
+      }
+      const currentUserId = String(currentUser?.userId || "");
+      const items = loadPendingMutations().filter(item =>
+        !item.payload.actorUserId || String(item.payload.actorUserId) === currentUserId
+      );
+      if (items.length === 0) return true;
+
+      pendingMutationRetryInFlight = (async () => {
+        let hadDefinitiveFailure = false;
+        for (const item of items) {
+          const result = await queueMutationTask(() =>
+            postPreparedMutation(item.payload, { isRetry: true })
+          );
+          if (result.pending) break;
+          if (!result.ok) hadDefinitiveFailure = true;
+        }
+        if (!hasPendingMutationForActiveProfile()) {
+          updateSyncBadge(hadDefinitiveFailure ? "部分操作未成功" : "變更已確認", !hadDefinitiveFailure);
+          if (hadDefinitiveFailure) showToast("有操作未成功，正在重新讀取雲端資料");
+          runBackgroundSync();
+          return !hadDefinitiveFailure;
+        }
+        updateSyncBadge("等待雲端確認", false);
+        return false;
+      })().finally(() => { pendingMutationRetryInFlight = null; });
+      return pendingMutationRetryInFlight;
+    }
+
+    function sendPostToGAS(payload) {
+      localMutationRevision += 1;
+      // 本機測試模式只驗證操作反應，不寫入正式資料。
+      if (isDevMode) return Promise.resolve({ ok: true, pending: false, message: "" });
+      if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL.indexOf("YOUR_GAS_API_URL") >= 0) {
+        return Promise.resolve({ ok: false, pending: false, message: "尚未設定雲端連線網址。" });
+      }
+
+      const requestPayload = buildMutationPayload(payload);
+      persistPendingMutation(requestPayload);
+      return queueMutationTask(() => postPreparedMutation(requestPayload));
     }
 
     // --- 5. LOCAL PERSISTENCE FALLBACK ---
@@ -2905,8 +3099,9 @@
           targetUserId: targetUserId,
           targetUserName: targetUserName,
           actorUserId: currentUser.userId,
-          adminPassword: currentAdminPassword,
-          history: evt.history,
+          ...(currentUserCanDeleteAnyEvent && !isCurrentUserHost(evt)
+            ? { adminPassword: currentAdminPassword }
+            : {}),
           historyEntry: evt.history[0]
         }).then(result => {
           if (!result.ok) {
@@ -3327,7 +3522,6 @@ ${pageUrl}`;
         userId: currentUser.userId,
         displayName: currentUser.displayName,
         pictureUrl: currentUser.pictureUrl,
-        history: evt.history,
         historyEntry: evt.history[0]
       }).then(result => {
         if (!result.ok) {
@@ -3635,6 +3829,10 @@ ${pageUrl}`;
         alert("只有主揪或管理員可以更換主揪。");
         return;
       }
+      const needsAdminPassword = currentUserCanDeleteAnyEvent && (
+        (hostChanged && !isCurrentUserHost(evt)) ||
+        (!hostChanged && !isCurrentUserHost(evt) && !isCurrentUserAttendee(evt))
+      );
 
       const contentChanges = [];
       if (evt.title !== newTitle) contentChanges.push(`名稱改為「${newTitle}」`);
@@ -3676,7 +3874,12 @@ ${pageUrl}`;
       }
 
       saveLocalEvents();
-      sendPostToGAS({ action: "saveEvent", eventAction: hostChanged ? "handoff" : "update", ...evt })
+      sendPostToGAS({
+        action: "saveEvent",
+        eventAction: hostChanged ? "handoff" : "update",
+        ...evt,
+        ...(needsAdminPassword ? { adminPassword: currentAdminPassword } : {})
+      })
         .then(result => {
           if (!result.ok) {
             rollbackEventState(
@@ -3739,11 +3942,16 @@ ${pageUrl}`;
         action: "toggleHighlight",
         eventId: eventId,
         highlighted: nextHighlighted,
-        historyEntry: entry
+        historyEntry: entry,
+        ...(currentUserCanDeleteAnyEvent && !isCurrentUserHost(evt) && !isCurrentUserAttendee(evt)
+          ? { adminPassword: currentAdminPassword }
+          : {})
       });
 
       if (!result.ok) {
         rollbackEventState(snapshot, `加強推廣設定失敗，已還原。\n\n${result.message}`);
+      } else if (result.pending) {
+        showToast(result.persisted ? "推廣設定已保留，雲端會自動確認" : "推廣結果待確認");
       } else {
         showToast(nextHighlighted ? "已開啟加強推廣" : "已取消加強推廣");
       }
@@ -3931,8 +4139,14 @@ ${getShareableUrl()}`;
               action: "deleteEvent",
               eventId: eventId,
               softDelete: true,
-              ...deletedEvent,
-              eventAction: "delete"
+              deletedAt: deletedEvent.deletedAt,
+              deletedBy: deletedEvent.deletedBy,
+              deletedByUserId: deletedEvent.deletedByUserId,
+              history: [deletedEvent.history[0]],
+              eventAction: "delete",
+              ...(currentUserCanDeleteAnyEvent && !isCurrentUserHost(evt)
+                ? { adminPassword: currentAdminPassword }
+                : {})
             });
 
             if (!wasSent.ok) {
@@ -3948,7 +4162,7 @@ ${getShareableUrl()}`;
             // 處理完成；失敗會在上面回滾。不再另外做一次驗證同步 ——
             // runBackgroundSync() 在「有其他寫入進行中」「頁面在背景」「GET 逾時」
             // 時都會回 false，那三種都不代表刪除失敗，卻會誤報成 Sheet 連線有問題。
-            showToast("活動已刪除");
+            showToast(wasSent.pending ? "刪除操作已保留，雲端會自動確認" : "活動已刪除");
             runBackgroundSync();
           }
         };

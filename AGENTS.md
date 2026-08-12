@@ -170,12 +170,21 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 ## 同步、更新與快取
 
 - 前端會定期同步 GAS 資料與檢查 `version.json`，並使用 `_ts` 與 `cache: "no-store"` 降低 LINE 內建瀏覽器快取影響。
+- GAS `doGet` 使用 Script Cache 暫存公開回應 20 秒，因單鍵上限而切成 20,000 字元一段；任何成功寫入、歸檔、許願結算或初始化都要呼叫 `invalidatePublicPayloadCache_()`。Cache 可能提早消失，cache miss 必須正常回退讀取 Sheet。
+- GAS 的 POST 每次只可呼叫一次 `getSpreadsheet_()`，再從同一個 Spreadsheet 取得 Events 與 AuditLog，避免重複開啟遠端文件。
+- `hasProcessedMutation_()` 先查六小時 mutation Cache，再只掃 AuditLog 最近 500 列。前端重試必須沿用原 `mutationId`，不得為同一操作產生新 ID。
 - 「重新整理」按鈕是資料同步，不等於強制重載 HTML。前端版本變更由 `version.json` 自動偵測。
 - 保留 `localMutationRevision`、`pendingMutationCount` 與遠端請求合併邏輯，不可讓較早回應覆蓋使用者剛完成的操作。
 - 前端先更新畫面的操作，若 GAS 寫入失敗，必須回滾本機畫面，不可讓使用者誤以為雲端已完成。
 - **不要用 `runBackgroundSync()` 的回傳值判斷寫入成功與否。** 它在「有其他寫入進行中」「頁面在背景」「GET 逾時」時都會回 `false`，三者都不代表寫入失敗。寫入結果一律以 `sendPostToGAS` 的 `ok` 為準，那已經檢查過 GAS 回應的 `status`。
 - `sendPostToGAS` 回傳 `{ ok, message }`。**每一個呼叫點都必須處理 `ok === false`**：用 `snapshotEventState()` 事前存檔、失敗時呼叫 `rollbackEventState()` 還原並顯示 GAS 的錯誤訊息。射後不理會讓使用者看到假成功，重新整理後才發現變更消失。
 - 寫入逾時使用 `CONFIG.WRITE_TIMEOUT_MS`。GAS 儲存活動時要同步 Google 日曆，逾時設太短會把已成功的寫入誤判為失敗而回滾。
+- 普通寫入在送出前保存到 `CONFIG.PENDING_MUTATIONS_KEY`，最多 20 筆、保留 24 小時，並用 `fetch keepalive` 讓小型請求在關閉頁面後盡量繼續。下次開啟、回到前景或恢復網路時依序重試。
+- 舊版 LINE WebView 若不支援 `fetch keepalive`，前端會以相同 `mutationId` 自動降級成一般請求；pending queue 仍保留作為下次開啟時的補送依據。
+- 網路錯誤與逾時是「結果未知」，不得立刻回滾；保留 optimistic UI 並等待同 mutationId 重試。只有 GAS 明確回覆 `status:error` 或確定的 4xx 才算真正失敗並回滾。
+- 管理員密碼絕不放入 pending queue；只有真的要管理別人的活動時才附上密碼。含管理員密碼的操作只能依靠當次 keepalive 與後續 GET 確認，無法在關閉後自動重送。
+- 瀏覽器 keepalive 約有 64KB 請求體限制，前端以 60KB 為安全門檻；超過時仍會正常傳送，但關閉頁面後不保證能繼續。
+- pending queue 只存在操作當下的裝置與 LINE 瀏覽器；清除網站資料、無痕模式或 localStorage 不可用時無法補送，其他裝置也不會代為重試。
 - 地圖短網址失敗結果在目前頁面會有記憶體快取；更新 GAS 後要完整關閉並重開 LINE 網頁再檢查。
 
 ## 修改與驗證清單
@@ -198,8 +207,9 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 8. 寫入流程修改要確認每個 `sendPostToGAS` 呼叫點都處理了失敗並回滾。
 9. 使用手機寬度檢查按鈕尺寸、表單捲動與 LINE 內建瀏覽器可操作性。
 10. 加強推廣要測試第 1～3 筆允許、第 4 筆拒絕、取消後可釋出名額，以及快速連點不會重複寫入。
-11. 若可連線診斷 GAS，先做唯讀 GET；POST 只測試不寫入資料的功能，例如錯誤管理員密碼或地圖解析。不得用正式活動做刪除或編輯測試。
-12. 純邏輯的 GAS 函式可從 `Code.gs` 抽出、以 stub 補上 `SpreadsheetApp`／`CalendarApp` 後在本機執行驗證，比只讀程式碼可靠得多。
+11. pending queue 要測試：同 mutationId 重試不重複寫入、兩筆操作維持順序、明確 GAS 錯誤會移除 queue、逾時仍保留，以及含管理員密碼的 payload 絕不進 localStorage。
+12. 若可連線診斷 GAS，先做唯讀 GET；POST 只測試不寫入資料的功能，例如錯誤管理員密碼或地圖解析。不得用正式活動做刪除或編輯測試。
+13. 純邏輯的 GAS 函式可從 `Code.gs` 抽出、以 stub 補上 `SpreadsheetApp`／`CalendarApp`／`CacheService` 後在本機執行驗證，比只讀程式碼可靠得多。
 
 ## 常見故障判斷
 

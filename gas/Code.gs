@@ -76,6 +76,14 @@ const APP_CONFIG = Object.freeze({
   WISH_MIN_ATTENDEES: 3,
   // 全站同時最多只能有三個仍在顯示中的加強推廣活動。
   MAX_HIGHLIGHTED_EVENTS: 3,
+  // 公開活動列表採短期快取；任何成功寫入都會立即清除。
+  PUBLIC_CACHE_TTL_SECONDS: 20,
+  PUBLIC_CACHE_CHUNK_SIZE: 20000,
+  PUBLIC_CACHE_META_KEY: "public_events_v5_meta",
+  PUBLIC_CACHE_CHUNK_PREFIX: "public_events_v5_chunk_",
+  // mutationId 只需回查近期紀錄；前端重試都會在短時間內發生。
+  MUTATION_LOOKBACK_ROWS: 500,
+  MUTATION_CACHE_SECONDS: 21600,
   STATUS_ACTIVE: "active",
   STATUS_DELETED: "deleted",
   ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
@@ -186,6 +194,7 @@ function setGoogleCalendar() {
     [APP_CONFIG.CALENDAR_ID_PROPERTY]: calendarId,
     [APP_CONFIG.CALENDAR_NAME_PROPERTY]: calendar.getName()
   });
+  invalidatePublicPayloadCache_();
   ui.alert("已連結 Google 日曆「" + calendar.getName() + "」，寫入權限測試通過。可再執行「同步現有未過期活動」。");
 }
 
@@ -296,6 +305,7 @@ function syncAllExistingEventsToCalendar() {
       syncedCount += 1;
     });
     SpreadsheetApp.flush();
+    invalidatePublicPayloadCache_();
     ui.alert("日曆同步完成：" + syncedCount + " 筆已同步，" + skippedCount + " 筆已跳過。");
   } finally {
     lock.releaseLock();
@@ -404,6 +414,7 @@ function setupProject() {
       SCHEMA_VERSION: APP_CONFIG.SCHEMA_VERSION
     });
     SpreadsheetApp.flush();
+    invalidatePublicPayloadCache_();
     return {
       status: "success",
       message: "Events、EventsArchive 與 AuditLog 已完成初始化，表格結構版本為 " +
@@ -430,20 +441,26 @@ function showSchemaInfo() {
 
 function doGet(e) {
   try {
-    const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
+    const cachedPayload = getCachedPublicPayload_();
+    if (cachedPayload) return jsonTextOutput_(cachedPayload);
+
+    const spreadsheet = getSpreadsheet_();
+    const eventsSheet = getRequiredSheetFromSpreadsheet_(spreadsheet, APP_CONFIG.EVENTS_SHEET);
     const schemaReady = hasRequiredHeaders_(eventsSheet, EVENT_HEADERS);
     // 只回傳仍需顯示的活動。已過期與已刪除一律不送，
     // 避免資料量隨時間無限累積，也不再對外公開已刪除活動的名單。
     const events = readAllEvents_(eventsSheet)
       .filter(eventItem => !isRetiredEvent_(eventItem));
 
-    return jsonOutput_({
+    const responsePayload = {
       status: "success",
       schemaVersion: schemaReady ? APP_CONFIG.SCHEMA_VERSION : "1",
       serverTime: new Date().toISOString(),
       calendar: getCalendarPublicInfo_(),
       events: events
-    });
+    };
+    putCachedPublicPayload_(JSON.stringify(responsePayload));
+    return jsonOutput_(responsePayload);
   } catch (error) {
     return errorOutput_(error);
   }
@@ -472,8 +489,10 @@ function doPost(e) {
 
     lock.waitLock(APP_CONFIG.LOCK_TIMEOUT_MS);
 
-    const eventsSheet = getRequiredSheet_(APP_CONFIG.EVENTS_SHEET);
-    const auditSheet = getRequiredSheet_(APP_CONFIG.AUDIT_SHEET);
+    // 每次請求只開啟一次 Spreadsheet，避免 Events / AuditLog 各自建立遠端連線。
+    const spreadsheet = getSpreadsheet_();
+    const eventsSheet = getRequiredSheetFromSpreadsheet_(spreadsheet, APP_CONFIG.EVENTS_SHEET);
+    const auditSheet = getRequiredSheetFromSpreadsheet_(spreadsheet, APP_CONFIG.AUDIT_SHEET);
 
     const needsFixedGroupSchema = payload.isFixedGroup === true ||
       String(payload.isFixedGroup || "").toLowerCase() === "true";
@@ -517,6 +536,7 @@ function doPost(e) {
     }
 
     SpreadsheetApp.flush();
+    invalidatePublicPayloadCache_();
     return jsonOutput_(Object.assign({
       status: "success",
       mutationId: payload.mutationId || "",
@@ -821,7 +841,11 @@ function addComment_(eventsSheet, auditSheet, payload) {
  */
 function toggleHighlight_(eventsSheet, auditSheet, payload) {
   const eventId = requireText_(payload.eventId, "缺少 eventId");
-  const found = requireEvent_(eventsSheet, eventId);
+  // 推廣需要同時計算全站名額，直接一次讀完整表格並找出目標列，
+  // 避免先 TextFinder 再重新讀完整 Events。
+  const eventRows = readAllEventsWithRows_(eventsSheet);
+  const found = eventRows.find(item => String(item.event.id || "") === eventId);
+  if (!found) throw new Error("找不到活動：" + eventId);
   const eventItem = found.event;
   assertActiveEvent_(eventItem);
   assertEditPermission_(eventItem, payload);
@@ -831,7 +855,7 @@ function toggleHighlight_(eventsSheet, auditSheet, payload) {
   const wasHighlighted = eventItem.isHighlighted === true;
 
   if (highlighted && !wasHighlighted) {
-    const highlightedCount = countActiveHighlightedEvents_(readAllEvents_(eventsSheet), eventId);
+    const highlightedCount = countActiveHighlightedEvents_(eventRows.map(item => item.event), eventId);
     if (highlightedCount >= APP_CONFIG.MAX_HIGHLIGHTED_EVENTS) {
       throw new Error("目前已有 3 個活動正在加強推廣，請先取消其中一個再試。");
     }
@@ -982,7 +1006,11 @@ function getSpreadsheet_() {
 }
 
 function getRequiredSheet_(sheetName) {
-  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  return getRequiredSheetFromSpreadsheet_(getSpreadsheet_(), sheetName);
+}
+
+function getRequiredSheetFromSpreadsheet_(spreadsheet, sheetName) {
+  const sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) throw new Error("缺少 " + sheetName + " 工作表，請先執行 setupProject()。\n");
   return sheet;
 }
@@ -1091,12 +1119,16 @@ function hasRequiredHeaders_(sheet, requiredHeaders) {
 }
 
 function readAllEvents_(sheet) {
+  return readAllEventsWithRows_(sheet).map(item => item.event);
+}
+
+function readAllEventsWithRows_(sheet) {
   if (sheet.getLastRow() < 2) return [];
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   return rows
-    .map(row => rowToEvent_(headers, row))
-    .filter(eventItem => eventItem.id);
+    .map((row, index) => ({ rowNumber: index + 2, event: rowToEvent_(headers, row) }))
+    .filter(item => item.event.id);
 }
 
 function rowToEvent_(headers, row) {
@@ -1403,16 +1435,35 @@ function appendAudit_(sheet, payload, logData) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const row = headers.map(header => eventFieldToCell_(header, rowObject[header]));
   sheet.appendRow(row);
+  if (rowObject.mutationId) {
+    CacheService.getScriptCache().put(
+      getMutationCacheKey_(rowObject.mutationId),
+      "1",
+      APP_CONFIG.MUTATION_CACHE_SECONDS
+    );
+  }
 }
 
 function hasProcessedMutation_(sheet, mutationId) {
-  if (!mutationId || sheet.getLastRow() < 2) return false;
+  if (!mutationId) return false;
+  const cache = CacheService.getScriptCache();
+  const cacheKey = getMutationCacheKey_(mutationId);
+  if (cache.get(cacheKey) === "1") return true;
+  if (sheet.getLastRow() < 2) return false;
   const map = getHeaderMap_(sheet);
   if (!map.mutationId) return false;
-  return Boolean(sheet.getRange(2, map.mutationId, sheet.getLastRow() - 1, 1)
+  const lastRow = sheet.getLastRow();
+  const firstRow = Math.max(2, lastRow - APP_CONFIG.MUTATION_LOOKBACK_ROWS + 1);
+  const found = Boolean(sheet.getRange(firstRow, map.mutationId, lastRow - firstRow + 1, 1)
     .createTextFinder(String(mutationId))
     .matchEntireCell(true)
     .findNext());
+  if (found) cache.put(cacheKey, "1", APP_CONFIG.MUTATION_CACHE_SECONDS);
+  return found;
+}
+
+function getMutationCacheKey_(mutationId) {
+  return "mutation_" + String(mutationId || "").slice(0, 220);
 }
 
 function parsePayload_(e) {
@@ -1435,9 +1486,80 @@ function requireText_(value, message) {
 }
 
 function jsonOutput_(data) {
+  return jsonTextOutput_(JSON.stringify(data));
+}
+
+function jsonTextOutput_(jsonText) {
   return ContentService
-    .createTextOutput(JSON.stringify(data))
+    .createTextOutput(String(jsonText || "{}"))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getCachedPublicPayload_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const metaText = cache.get(APP_CONFIG.PUBLIC_CACHE_META_KEY);
+    if (!metaText) return "";
+    const meta = JSON.parse(metaText);
+    const count = Math.max(0, Number(meta.count || 0));
+    if (!count || count > 100) return "";
+    const keys = Array.from({ length: count }, (_, index) =>
+      APP_CONFIG.PUBLIC_CACHE_CHUNK_PREFIX + index
+    );
+    const chunks = cache.getAll(keys);
+    if (keys.some(key => typeof chunks[key] !== "string")) return "";
+    return keys.map(key => chunks[key]).join("");
+  } catch (error) {
+    console.warn("公開活動快取讀取失敗：" + String(error && error.message ? error.message : error));
+    return "";
+  }
+}
+
+function putCachedPublicPayload_(jsonText) {
+  try {
+    const text = String(jsonText || "");
+    if (!text) return;
+    const chunks = {};
+    let count = 0;
+    let offset = 0;
+    while (offset < text.length) {
+      let end = Math.min(text.length, offset + APP_CONFIG.PUBLIC_CACHE_CHUNK_SIZE);
+      // 不在 emoji 的 surrogate pair 中間切開，避免分段個別編碼時毀損字元。
+      if (end < text.length && /[\uD800-\uDBFF]/.test(text.charAt(end - 1))) end -= 1;
+      chunks[APP_CONFIG.PUBLIC_CACHE_CHUNK_PREFIX + count] =
+        text.slice(offset, end);
+      count += 1;
+      offset = end;
+    }
+    const cache = CacheService.getScriptCache();
+    cache.putAll(chunks, APP_CONFIG.PUBLIC_CACHE_TTL_SECONDS);
+    // 最後才寫 meta，避免其他請求讀到尚未完整存入的分段資料。
+    cache.put(
+      APP_CONFIG.PUBLIC_CACHE_META_KEY,
+      JSON.stringify({ count: count }),
+      APP_CONFIG.PUBLIC_CACHE_TTL_SECONDS
+    );
+  } catch (error) {
+    console.warn("公開活動快取寫入失敗：" + String(error && error.message ? error.message : error));
+  }
+}
+
+function invalidatePublicPayloadCache_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const metaText = cache.get(APP_CONFIG.PUBLIC_CACHE_META_KEY);
+    const keys = [APP_CONFIG.PUBLIC_CACHE_META_KEY];
+    if (metaText) {
+      const meta = JSON.parse(metaText);
+      const count = Math.max(0, Math.min(100, Number(meta.count || 0)));
+      for (let index = 0; index < count; index += 1) {
+        keys.push(APP_CONFIG.PUBLIC_CACHE_CHUNK_PREFIX + index);
+      }
+    }
+    cache.removeAll(keys);
+  } catch (error) {
+    console.warn("公開活動快取清除失敗：" + String(error && error.message ? error.message : error));
+  }
 }
 
 function errorOutput_(error) {
@@ -1593,6 +1715,7 @@ function archiveRetiredEvents() {
     retiredRowNumbers.slice().reverse().forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
 
     SpreadsheetApp.flush();
+    invalidatePublicPayloadCache_();
     return { moved: retiredRows.length, remaining: Math.max(eventsSheet.getLastRow() - 1, 0) };
   } finally {
     lock.releaseLock();
@@ -1664,6 +1787,7 @@ function cleanupExpiredWishes() {
       .forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
 
     SpreadsheetApp.flush();
+    invalidatePublicPayloadCache_();
     return { fulfilled: fulfilledRows.length, removed: doomedRowNumbers.length };
   } finally {
     lock.releaseLock();
