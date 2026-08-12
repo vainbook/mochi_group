@@ -74,6 +74,8 @@ const APP_CONFIG = Object.freeze({
   // 報名人數超過 WISH_MIN_ATTENDEES 才成立，否則整列硬刪除、不歸檔。
   WISH_LIFESPAN_DAYS: 3,
   WISH_MIN_ATTENDEES: 3,
+  // 全站同時最多只能有三個仍在顯示中的加強推廣活動。
+  MAX_HIGHLIGHTED_EVENTS: 3,
   STATUS_ACTIVE: "active",
   STATUS_DELETED: "deleted",
   ADMIN_PASSWORD_HASH_PROPERTY: "ADMIN_PASSWORD_HASH",
@@ -81,7 +83,7 @@ const APP_CONFIG = Object.freeze({
   CALENDAR_ID_PROPERTY: "GOOGLE_CALENDAR_ID",
   CALENDAR_NAME_PROPERTY: "GOOGLE_CALENDAR_NAME",
   LOCK_TIMEOUT_MS: 15000,
-  SCHEMA_VERSION: "4"
+  SCHEMA_VERSION: "5"
 });
 
 const EVENT_HEADERS = Object.freeze([
@@ -91,6 +93,7 @@ const EVENT_HEADERS = Object.freeze([
   "datetime",
   "isFixedGroup",
   "isWish",
+  "isHighlighted",
   "fixedTimeText",
   "location",
   "hostName",
@@ -417,6 +420,7 @@ function showSchemaInfo() {
     "固定團：isFixedGroup 為 TRUE，固定時間保存在 fixedTimeText。",
     "固定團與一般活動共用同一份 attendees 名單，沒有分固定／本週參與。",
     "許願活動：isWish 為 TRUE，建立滿 3 天午夜結算，人數未超過 3 人整列刪除且不歸檔。",
+    "加強推廣：isHighlighted 為 TRUE，全站同時最多 3 個仍在顯示中的活動。",
     "Google 日曆：calendarEventId 保存對應行程 ID，日曆 ID 只保存在 Script Properties。",
     "AuditLog：永久保存建立、報名、退出、編輯、交棒與刪除紀錄。",
     "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。"
@@ -501,6 +505,12 @@ function doPost(e) {
         break;
       case "addComment":
         result = addComment_(eventsSheet, auditSheet, payload);
+        break;
+      case "toggleHighlight":
+        if (!hasRequiredHeaders_(eventsSheet, EVENT_HEADERS)) {
+          throw new Error("加強推廣欄位尚未初始化，請先執行 setupProject()。");
+        }
+        result = toggleHighlight_(eventsSheet, auditSheet, payload);
         break;
       default:
         throw new Error("不支援的 action：" + String(payload.action || "空白"));
@@ -629,6 +639,8 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
     // 否則舊快照的空字串會清掉連結，下次儲存就會另外建立重複的日曆行程。
     normalizedEvent.calendarEventId = String(existingEvent.calendarEventId || "");
     normalizedEvent.isFixedGroup = existingEvent.isFixedGroup === true;
+    // 加強推廣只能走 toggleHighlight，避免舊分頁編輯活動時把旗標蓋回舊值。
+    normalizedEvent.isHighlighted = existingEvent.isHighlighted === true;
     normalizedEvent.attendees = normalizeUsers_(existingEvent.attendees);
     normalizedEvent.fixedAttendees = [];
     normalizedEvent.weeklyAttendees = [];
@@ -652,6 +664,8 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
   } else {
     // 新活動一律從沒有日曆行程開始，不接受前端帶進來的 calendarEventId。
     normalizedEvent.calendarEventId = "";
+    // 建立活動時不可夾帶推廣旗標；建立後必須另外走名額檢查。
+    normalizedEvent.isHighlighted = false;
     normalizedEvent.fixedAttendees = [];
     normalizedEvent.weeklyAttendees = [];
     const creatingHost = normalizeUser_(normalizedEvent.hostUser);
@@ -801,6 +815,78 @@ function addComment_(eventsSheet, auditSheet, payload) {
   return { eventId: eventId, history: eventItem.history, entry: entry };
 }
 
+/**
+ * 開啟／取消加強推廣。使用與編輯活動相同的權限，並在 Script Lock 內
+ * 計算全站名額，避免多支手機同時操作時超過三筆。
+ */
+function toggleHighlight_(eventsSheet, auditSheet, payload) {
+  const eventId = requireText_(payload.eventId, "缺少 eventId");
+  const found = requireEvent_(eventsSheet, eventId);
+  const eventItem = found.event;
+  assertActiveEvent_(eventItem);
+  assertEditPermission_(eventItem, payload);
+
+  const highlighted = payload.highlighted === true ||
+    String(payload.highlighted || "").toLowerCase() === "true";
+  const wasHighlighted = eventItem.isHighlighted === true;
+
+  if (highlighted && !wasHighlighted) {
+    const highlightedCount = countActiveHighlightedEvents_(readAllEvents_(eventsSheet), eventId);
+    if (highlightedCount >= APP_CONFIG.MAX_HIGHLIGHTED_EVENTS) {
+      throw new Error("目前已有 3 個活動正在加強推廣，請先取消其中一個再試。");
+    }
+  }
+
+  if (highlighted === wasHighlighted) {
+    return {
+      eventId: eventId,
+      highlighted: highlighted,
+      unchanged: true,
+      history: eventItem.history
+    };
+  }
+
+  const sourceEntry = payload.historyEntry || {};
+  const actionText = highlighted ? "開啟加強推廣" : "取消加強推廣";
+  const entry = {
+    id: String(sourceEntry.id || ("log_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8))),
+    author: String(payload.actorName || "未命名成員"),
+    authorUserId: String(payload.actorUserId || ""),
+    time: String(sourceEntry.time || ""),
+    timestamp: new Date().toISOString(),
+    action: actionText,
+    type: highlighted ? "highlight" : "unhighlight"
+  };
+
+  eventItem.isHighlighted = highlighted;
+  eventItem.history = mergeHistoryEntries_(eventItem.history, entry);
+  eventItem.updatedAt = new Date().toISOString();
+  eventItem.schemaVersion = APP_CONFIG.SCHEMA_VERSION;
+  writeEvent_(eventsSheet, found.rowNumber, eventItem);
+
+  appendAudit_(auditSheet, payload, {
+    eventId: eventId,
+    actionType: highlighted ? "highlight" : "unhighlight",
+    action: actionText,
+    details: { highlighted: highlighted }
+  });
+
+  return {
+    eventId: eventId,
+    highlighted: highlighted,
+    history: eventItem.history,
+    entry: entry
+  };
+}
+
+function countActiveHighlightedEvents_(events, excludedEventId) {
+  return (Array.isArray(events) ? events : []).filter(item =>
+    String(item.id || "") !== String(excludedEventId || "") &&
+    item.isHighlighted === true &&
+    !isRetiredEvent_(item)
+  ).length;
+}
+
 function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
   const eventId = requireText_(payload.eventId, "缺少 eventId");
   const targetUserId = requireText_(payload.targetUserId, "缺少 targetUserId");
@@ -944,6 +1030,8 @@ function formatEventsSheet_(sheet) {
   setColumnWidthIfPresent_(sheet, map, "title", 220);
   setColumnWidthIfPresent_(sheet, map, "datetime", 150);
   setColumnWidthIfPresent_(sheet, map, "isFixedGroup", 100);
+  setColumnWidthIfPresent_(sheet, map, "isWish", 90);
+  setColumnWidthIfPresent_(sheet, map, "isHighlighted", 110);
   setColumnWidthIfPresent_(sheet, map, "fixedTimeText", 210);
   setColumnWidthIfPresent_(sheet, map, "location", 220);
   setColumnWidthIfPresent_(sheet, map, "hostName", 130);
@@ -1018,7 +1106,7 @@ function rowToEvent_(headers, row) {
     let value = row[index];
     if (JSON_EVENT_FIELDS.includes(header)) value = parseJsonField_(value, header === "hostUser" ? null : []);
     if (header === "maxAttendees") value = Number(value || 0);
-    if (["deleted", "isFixedGroup", "isWish"].includes(header)) {
+    if (["deleted", "isFixedGroup", "isWish", "isHighlighted"].includes(header)) {
       value = value === true || String(value).toLowerCase() === "true";
     }
     if (typeof value === "string" && /^'[=+\-@]/.test(value)) value = value.slice(1);
@@ -1028,6 +1116,7 @@ function rowToEvent_(headers, row) {
   eventItem.deleted = isDeletedEvent_(eventItem);
   eventItem.isFixedGroup = eventItem.isFixedGroup === true;
   eventItem.isWish = eventItem.isWish === true;
+  eventItem.isHighlighted = eventItem.isHighlighted === true;
   // 舊資料相容：固定團曾經把名單拆成固定參與／本週參與兩份，
   // 現在只用單一 attendees。讀取時併回來，之後一律寫入空陣列。
   const legacyFixed = normalizeUsers_(eventItem.fixedAttendees);
@@ -1086,6 +1175,7 @@ function normalizeEvent_(payload, existingEvent) {
     datetime: String(source.datetime || ""),
     isFixedGroup: source.isFixedGroup === true || String(source.isFixedGroup).toLowerCase() === "true",
     isWish: source.isWish === true || String(source.isWish).toLowerCase() === "true",
+    isHighlighted: source.isHighlighted === true || String(source.isHighlighted).toLowerCase() === "true",
     fixedTimeText: String(source.fixedTimeText || "").trim(),
     location: String(source.location || "待定"),
     hostName: String(source.hostName || (source.hostUser && source.hostUser.displayName) || ""),

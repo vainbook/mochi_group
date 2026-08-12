@@ -4,7 +4,7 @@
 
 ## 專案結構
 
-- `index.html`：單檔前端，包含 HTML、CSS 與所有瀏覽器 JavaScript（約 3600 行，JS 2200 行、89 個函式）。已接近單檔可維護的上限，新增大型功能前先評估是否要拆檔。
+- `index.html`：單檔前端，包含 HTML、CSS 與所有瀏覽器 JavaScript（已超過 3800 行）。已接近單檔可維護的上限，新增大型功能前先評估是否要拆檔。
 - `version.json`：GitHub Pages 自動更新檢查用的版本清單。
 - `gas/Code.gs`：Google Apps Script 後端，處理 Sheet 讀寫、權限、地圖短網址、Google 日曆同步、歸檔與操作紀錄。
 - `gas/README.md`：GAS 表格欄位、安裝、部署、日曆與歸檔說明。
@@ -27,7 +27,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 
 若使用「新增部署」而產生新 `/exec` 網址，必須同步更新 `index.html` 的 `CONFIG.GAS_API_URL`。優先編輯原部署並選「新版本」，以保持網址不變。
 
-線上 `/exec` 的當前結構應回傳最外層 `"schemaVersion":"4"`，並包含 `calendar` 欄位。個別舊活動的 `schemaVersion:1` 只代表建立於舊版，不代表整張 Sheet 仍是舊結構。
+線上 `/exec` 的當前結構應回傳最外層 `"schemaVersion":"5"`，並包含 `calendar` 欄位。個別舊活動的 `schemaVersion:1` 只代表建立於舊版，不代表整張 Sheet 仍是舊結構。
 
 判斷「部署到底更新了沒」時，注意 Sheet 選單功能（設定日曆、歸檔、診斷）跑的是**編輯器裡儲存的程式碼**，不需要部署；只有 `/exec`（LINE 網頁連的端點）用的是部署版本。兩者可能不同步，這是最常見的排查陷阱。
 
@@ -51,7 +51,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - `setAdminPassword()` 只保存加鹽 SHA-256 雜湊到 Script Properties，密碼不得出現在 Sheet 或程式碼。
 - 寫入操作必須保留 Script Lock 與 `mutationId` 幂等檢查，避免手機與電腦同時操作重複寫入。
 - 刪除活動必須維持 soft delete：`deleteEvent` 只設 `status = deleted` 並寫入 `deletedAt`、`deletedBy`、`deletedByUserId`，**不可在請求處理中刪除 Sheet 列**。列的移除只由每日歸檔流程執行，且必須先複製到 `EventsArchive` 才刪除，刪列時要由下往上避免列號位移。
-- `AuditLog` 與活動 `history` 必須記錄建立、編輯、報名、退出、交棒與刪除。
+- `AuditLog` 與活動 `history` 必須記錄建立、編輯、報名、退出、交棒、加強推廣／取消推廣與刪除。
 - GAS 是多人同步的最終資料來源。不得讓舊前端快照覆蓋 GAS 中較新的參與名單。
 
 ## 權限模型
@@ -65,12 +65,13 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 | 刪除活動 | ✓ | ✓ | ✗ | ✗ |
 | 移除成員 | ✓ | ✓ | ✗ | ✗ |
 | 活動留言 | ✓ | ✓ | ✓ | ✓ |
+| 開啟／取消加強推廣 | ✓ | ✓ | ✓ | ✗ |
 
 - 已報名成員可共同維護活動細節，這是刻意開放的。GAS 用 `assertEditPermission_()`（含 `isEventAttendee_()`）驗證。
 - **交棒必須用 `assertHandoffPermission_()`，不可沿用 `assertEditPermission_()`** —— 否則任何報名者都能把自己設成主揪。前端也要同步用 `canCurrentUserHandoffHost()` 鎖住主揪下拉選單。
 - 留言不限已報名者，任何已登入成員都可以留言。
 - 管理員入口隱藏在頁首版本號上：點擊 `.version-label` 開啟／退出管理員模式，仍必須輸入密碼。不得改回顯眼的「管理員模式」按鈕。
-- 管理員密碼只能在 `saveEvent` 與 `deleteEvent` 等需要權限的請求中透過 HTTPS 傳給 GAS，不得寫進 localStorage、活動紀錄或 AuditLog。重新載入後要自動退出管理員模式。
+- 管理員密碼只能在 `saveEvent`、`deleteEvent`、`toggleHighlight` 等需要權限的請求中透過 HTTPS 傳給 GAS，不得寫進 localStorage、活動紀錄或 AuditLog。重新載入後要自動退出管理員模式。
 - 權限變更必須同時修改前端的按鈕顯示／送出 payload，以及 GAS 的 `assert...Permission_` 驗證；只修改一邊不算完成。
 - 主揪不可直接退出自己的活動；必須先在編輯頁把主揪交棒給另一位已報名成員。
 - 交棒候選人必須來自已報名名單，不得手動輸入名稱。
@@ -122,6 +123,17 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - 長度上限 `MAX_COMMENT_LENGTH`（150 字），前後端都要驗證。空白留言一律擋下。
 - 留言計入 `MAX_EVENT_HISTORY`（50 筆）上限。調高上限會等比放大每次同步的傳輸量，改動前先估算。
 - 卡片上的「活動留言」按鈕取代了原本的「加到行事曆」。固定團也顯示留言按鈕。
+
+### 加強推廣
+
+- 持久狀態使用 `isHighlighted`，需要表格結構版本 `5`。schema 低於 5 時，詳情頁按鈕要顯示「加強推廣（需更新）」並停用。
+- 操作入口放在活動詳情的「@標記成員／分享活動」旁。開啟後按鈕改為「取消加強推廣」，取消前要讓使用者確認。
+- 權限與編輯活動內容相同：主揪、管理員及已報名成員可操作，未報名者不可操作。前端用 `canCurrentUserEditEvent()`，GAS 用 `assertEditPermission_()`。
+- 全站同時最多 `APP_CONFIG.MAX_HIGHLIGHTED_EVENTS`（3）個仍在顯示中的推廣活動。最終名額必須由 GAS 的 `toggleHighlight_()` 在 Script Lock 內計算；前端檢查只用於提早提示。
+- 開啟與取消都必須寫入活動 `history` 及 `AuditLog`，action type 分別是 `highlight`、`unhighlight`。
+- 一般 `saveEvent` 不可修改既有 `isHighlighted`；只能透過 `toggleHighlight`，避免舊分頁編輯活動時覆蓋推廣狀態。建立新活動也一律從 `false` 開始。
+- 視覺只套在 `.card-summary-bar`：粉紅漸層背景加 CSS 櫻花飄落效果，展開內容維持白底。若活動同時是許願與加強推廣，以加強推廣的粉紅櫻花視覺為準。
+- `prefers-reduced-motion: reduce` 時停用櫻花動畫，但保留粉紅底色。
 
 ### Google 日曆
 
@@ -185,8 +197,9 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 7. 同步修改要測試重複 `mutationId`、快速連點、較舊回應不覆蓋新狀態。
 8. 寫入流程修改要確認每個 `sendPostToGAS` 呼叫點都處理了失敗並回滾。
 9. 使用手機寬度檢查按鈕尺寸、表單捲動與 LINE 內建瀏覽器可操作性。
-10. 若可連線診斷 GAS，先做唯讀 GET；POST 只測試不寫入資料的功能，例如錯誤管理員密碼或地圖解析。不得用正式活動做刪除或編輯測試。
-11. 純邏輯的 GAS 函式可從 `Code.gs` 抽出、以 stub 補上 `SpreadsheetApp`／`CalendarApp` 後在本機執行驗證，比只讀程式碼可靠得多。
+10. 加強推廣要測試第 1～3 筆允許、第 4 筆拒絕、取消後可釋出名額，以及快速連點不會重複寫入。
+11. 若可連線診斷 GAS，先做唯讀 GET；POST 只測試不寫入資料的功能，例如錯誤管理員密碼或地圖解析。不得用正式活動做刪除或編輯測試。
+12. 純邏輯的 GAS 函式可從 `Code.gs` 抽出、以 stub 補上 `SpreadsheetApp`／`CalendarApp` 後在本機執行驗證，比只讀程式碼可靠得多。
 
 ## 常見故障判斷
 

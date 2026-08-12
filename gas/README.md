@@ -35,7 +35,7 @@
 
 `setupProject()` 不會刪除既有資料。如果原本工作表第一列已包含 `id` 與 `title`，它會將該表改名為 `Events`，並在右側補齊缺少欄位。
 
-固定團功能至少需要表格結構版本 `2`；Google 日曆連動新增 `calendarEventId` 欄位（版本 `3`）；許願功能新增 `isWish` 欄位，因此目前完整結構版本為 `4`。新版 GAS 貼上後一定要重新執行一次 `setupProject()`。
+固定團功能至少需要表格結構版本 `2`；Google 日曆連動新增 `calendarEventId` 欄位（版本 `3`）；許願功能新增 `isWish` 欄位（版本 `4`）；加強推廣新增 `isHighlighted` 欄位，因此目前完整結構版本為 `5`。新版 GAS 貼上後一定要重新執行一次 `setupProject()`。
 
 Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取得網址中的地點名稱或地址。網頁會以該名稱作為可點擊的地圖連結，不需要 Google Maps API 金鑰。
 
@@ -68,6 +68,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `datetime` | 活動日期時間 |
 | `isFixedGroup` | 是否為固定團，`TRUE` 代表固定團 |
 | `isWish` | 是否為許願活動，`TRUE` 代表許願 |
+| `isHighlighted` | 是否正在加強推廣，`TRUE` 代表套用粉紅櫻花標題視覺；全站最多同時 3 筆 |
 | `fixedTimeText` | 固定團由主揪手寫的時間文字 |
 | `location` | 地點 |
 | `hostName` | 目前主揪顯示名稱 |
@@ -97,7 +98,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `timestamp` | 伺服器紀錄時間 |
 | `actorUserId` | 操作者 LINE userId |
 | `actorName` | 操作者名稱 |
-| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`admin_remove_attendee` |
+| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`highlight`、`unhighlight`、`admin_remove_attendee` |
 | `action` | 可閱讀的操作說明 |
 | `details` | 補充 JSON 資料 |
 
@@ -106,6 +107,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 - `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
 - 許願活動（`isWish = TRUE`）由午夜觸發器 `cleanupExpiredWishes` 結算：建立滿 3 個日曆天時，當下報名人數超過 3 人則轉為一般活動，否則整列硬刪除且不進 `EventsArchive`。刪除前會先移除對應的 Google 日曆行程。
 - `addComment`：在活動紀錄新增一則留言，任何已登入成員都可以。內容由 GAS 重新組裝並限制 150 字，不採用前端送來的 history 條目。
+- `toggleHighlight`：主揪、管理員或已報名成員可開啟／取消加強推廣。GAS 在 Script Lock 內檢查仍在顯示中的推廣活動，最多同時 3 筆；一般 `saveEvent` 不可直接修改此旗標。
 - 編輯活動時，GAS 只更新活動內容並保留雲端最新報名名單，避免舊分頁覆蓋新報名。
 - `toggleRSVP`：使用明確的 `join`／`cancel`，不再用模糊的切換操作。固定團與一般活動走同一條路徑。
 - 固定團主揪不可直接取消參與，如需退出一樣要先交棒。
@@ -159,7 +161,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 部署完成後，直接開啟 GAS `/exec` 網址，應看到類似：
 
 ```json
-{"status":"success","schemaVersion":"4","calendar":{"configured":true,"calendarId":"...","name":"..."},"events":[]}
+{"status":"success","schemaVersion":"5","calendar":{"configured":true,"calendarId":"...","name":"..."},"events":[]}
 ```
 
 看到 `calendar` 欄位才代表部署的是含日曆頁功能的版本。
@@ -177,6 +179,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 9. 刪除未過期活動，確認對應行程一併移除。
 10. 手動從 Google 日曆刪掉某筆行程，再於網頁編輯該活動，確認會**重新建立**行程而不是靜默無反應。
 11. 執行「日曆診斷」，確認「連結有效」筆數與日曆上「【揪團】」開頭的行程數一致。
+12. 依序為三個未過期活動開啟加強推廣，確認 `isHighlighted = TRUE`；第四個活動必須被拒絕。取消其中一個後，第四個才能成功開啟。
 
 已刪除與過期活動只能在 `EventsArchive` 工作表內查看。`?includeDeleted=1` 參數已移除，不要重新加回 —— 它會讓任何拿到 `/exec` 網址的人取得已刪除活動的完整成員名單。
 

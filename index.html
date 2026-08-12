@@ -327,7 +327,7 @@
       transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    /* 1️⃣ 第一層：單行折疊標頭 */
+    /* 第一層：單行折疊標頭 */
     .card-summary-bar {
       display: flex;
       align-items: center;
@@ -391,7 +391,7 @@
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* 2️⃣ 第二層：展開內容主體 */
+    /* 第二層：展開內容主體 */
     .card-body-collapsible {
       max-height: 0;
       opacity: 0;
@@ -1009,6 +1009,88 @@
       border: 1px solid #ec4899;
     }
 
+    /* 加強推廣：粉紅標題列與兩層飄落櫻花，展開內容仍維持白底易讀性。 */
+    .event-card.is-highlighted .card-summary-bar,
+    .event-card.is-highlighted .card-summary-bar:active,
+    .event-card.is-highlighted.is-expanded .card-summary-bar {
+      background: linear-gradient(120deg, #fff1f6 0%, #fbcfe8 48%, #f9a8d4 100%);
+      position: relative;
+      overflow: hidden;
+      border-bottom-color: rgba(190, 24, 93, 0.2);
+    }
+
+    .event-card.is-highlighted .card-summary-bar::before,
+    .event-card.is-highlighted .card-summary-bar::after {
+      content: "";
+      position: absolute;
+      inset: -45% -10%;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(ellipse at center, rgba(255,255,255,0.98) 0 34%, rgba(244,114,182,0.72) 38% 58%, transparent 62%),
+        radial-gradient(ellipse at center, rgba(255,255,255,0.92) 0 32%, rgba(251,113,133,0.68) 37% 57%, transparent 61%),
+        radial-gradient(ellipse at center, rgba(255,255,255,0.96) 0 33%, rgba(236,72,153,0.62) 38% 56%, transparent 61%);
+      background-size: 16px 10px, 13px 9px, 18px 11px;
+      background-position: 8% 10%, 48% 34%, 82% 4%;
+      background-repeat: no-repeat;
+      opacity: 0.9;
+      animation: sakura-drift 5.2s linear infinite;
+    }
+
+    .event-card.is-highlighted .card-summary-bar::after {
+      background-size: 12px 8px, 17px 10px, 14px 9px;
+      background-position: 22% 3%, 67% 22%, 94% 42%;
+      opacity: 0.68;
+      animation-duration: 7.4s;
+      animation-delay: -3.1s;
+    }
+
+    @keyframes sakura-drift {
+      from { transform: translate3d(-3%, -18%, 0) rotate(0deg); }
+      to { transform: translate3d(9%, 42%, 0) rotate(26deg); }
+    }
+
+    .event-card.is-highlighted .card-summary-bar > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .event-card.is-highlighted .event-summary-title,
+    .event-card.is-highlighted .expand-icon {
+      color: #831843;
+    }
+
+    .event-card.is-highlighted .event-time-chip {
+      background: rgba(255, 255, 255, 0.72);
+      color: #9d174d;
+      box-shadow: 0 1px 4px rgba(190, 24, 93, 0.12);
+    }
+
+    .btn-highlight {
+      background: #fdf2f8;
+      color: #be185d;
+      border: 1px solid #f9a8d4;
+    }
+
+    .btn-highlight.is-active {
+      background: #be185d;
+      color: #ffffff;
+      border-color: #be185d;
+    }
+
+    .detail-member-actions {
+      display: flex;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .event-card.is-highlighted .card-summary-bar::before,
+      .event-card.is-highlighted .card-summary-bar::after { animation: none; }
+    }
+
     .fixed-time-field {
       display: none;
     }
@@ -1261,7 +1343,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-10T14:13:13+08:00">v260810.1413</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-12T15:05:21+08:00">v260812.1505</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1558,12 +1640,15 @@
         <div style="margin-bottom:14px;">
           <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
             <span><span id="detail-attendee-heading">已報名成員名冊</span> (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
-            <span style="display:flex; gap:6px; flex-shrink:0;">
+            <span class="detail-member-actions">
               <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
                 @標記成員
               </button>
               <button id="btn-share-event" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
                 分享活動
+              </button>
+              <button id="btn-highlight-event" class="line-btn btn-highlight" style="padding:4px 8px; font-size:12px;">
+                加強推廣
               </button>
             </span>
           </div>
@@ -1669,7 +1754,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260810.1413", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260812.1505", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1710,6 +1795,7 @@
     let automaticUpdatesStarted = false;
     let automaticUpdateDebounceTimer = null;
     const processingRSVPEventIds = new Set();
+    const processingHighlightEventIds = new Set();
     const locationResolveCache = new Map();
 
     // --- CROSS-PLATFORM UTILS ---
@@ -1810,6 +1896,13 @@
       ));
     }
 
+    function isHighlightedEvent(evt) {
+      return Boolean(evt && (
+        evt.isHighlighted === true ||
+        String(evt.isHighlighted || "").toLowerCase() === "true"
+      ));
+    }
+
     // 許願結算以日曆天計算，與 GAS 的 getCalendarDayDiff_ 一致。
     function getWishDaysLeft(evt) {
       if (!isWishEvent(evt)) return null;
@@ -1858,6 +1951,7 @@
     // 與 GAS 的 WISH_LIFESPAN_DAYS / WISH_MIN_ATTENDEES 一致。
     const WISH_LIFESPAN_DAYS = 3;
     const WISH_MIN_ATTENDEES = 3;
+    const MAX_HIGHLIGHTED_EVENTS = 3;
 
     // 與 GAS 的 EVENT_GRACE_MS 一致：結束後 2 小時才算過期，
     // 活動進行中仍看得到。固定團永遠不會過期。
@@ -2569,6 +2663,10 @@
             });
             remoteEvt.isFixedGroup = remoteEvt.isFixedGroup === true ||
               String(remoteEvt.isFixedGroup || "").toLowerCase() === "true";
+            remoteEvt.isWish = remoteEvt.isWish === true ||
+              String(remoteEvt.isWish || "").toLowerCase() === "true";
+            remoteEvt.isHighlighted = remoteEvt.isHighlighted === true ||
+              String(remoteEvt.isHighlighted || "").toLowerCase() === "true";
 
             // 容錯防崩潰解析 history
             try {
@@ -2664,7 +2762,7 @@
           mutationId: payload.mutationId || `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           actorUserId: payload.actorUserId || currentUser?.userId || "",
           actorName: payload.actorName || currentUser?.displayName || "",
-          ...(["deleteEvent", "saveEvent"].includes(payload.action) && currentUserCanDeleteAnyEvent
+          ...(["deleteEvent", "saveEvent", "toggleHighlight"].includes(payload.action) && currentUserCanDeleteAnyEvent
             ? { adminPassword: currentAdminPassword }
             : {}),
           clientVersion: CONFIG.APP_VERSION
@@ -3033,7 +3131,8 @@
         const isExpanded = expandedEventIds.has(evt.id);
 
         const cardEl = document.createElement("div");
-        cardEl.className = `event-card ${isEnded ? 'ended' : ''} ${isExpanded ? 'is-expanded' : ''} ${wishEvent ? 'is-wish' : ''}`;
+        const highlightedEvent = isHighlightedEvent(evt);
+        cardEl.className = `event-card ${isEnded ? 'ended' : ''} ${isExpanded ? 'is-expanded' : ''} ${wishEvent ? 'is-wish' : ''} ${highlightedEvent ? 'is-highlighted' : ''}`;
 
         let actionButtonsHtml = "";
         if (fixedGroup) {
@@ -3062,7 +3161,7 @@
         const commentHtml = `<button class="line-btn btn-calendar comment-action" type="button">活動留言</button>`;
 
         cardEl.innerHTML = `
-          <!-- 1️⃣ 第一層：折疊單行標頭 -->
+          <!-- 第一層：折疊單行標頭 -->
           <div class="card-summary-bar" onclick="toggleEventExpand('${evt.id}', event)">
             <div class="card-summary-left">
               <span class="event-time-chip">${escapeHtml(shortTimeText)}</span>
@@ -3074,7 +3173,7 @@
             </div>
           </div>
 
-          <!-- 2️⃣ 第二層：展開內容主體 -->
+          <!-- 第二層：展開內容主體 -->
           <div class="card-body-collapsible">
             <div class="card-header">
               <div class="card-title">${escapeHtml(evt.title)}</div>
@@ -3168,7 +3267,7 @@ ${eventBlocks}
 ${pageUrl}`;
 
       safeCopyText(broadcastText);
-      showToast("📋 已複製宣傳資訊，請分享到群組！");
+      showToast("已複製宣傳資訊，請分享到群組！");
     }
 
     // --- 10. EXPORT ENDED EVENTS FUNCTION ---
@@ -3307,6 +3406,7 @@ ${pageUrl}`;
         datetime: fixedGroup ? "" : getDateTimePickerValue("input"),
         isFixedGroup: fixedGroup,
         isWish: wishEvent,
+        isHighlighted: false,
         fixedTimeText: fixedGroup ? fixedTimeText : "",
         location: normalizeLocation(document.getElementById("input-location").value),
         fee: document.getElementById("input-fee").value.trim() || "免費",
@@ -3594,6 +3694,67 @@ ${pageUrl}`;
       triggerAutoCopyAndAlert(evt, "update");
     });
 
+    async function toggleEventHighlight(eventId) {
+      if (!ensureLoggedIn() || processingHighlightEventIds.has(eventId)) return;
+      const evt = eventsData.find(item => item.id === eventId);
+      if (!evt) return;
+      if (!isDevMode && Number(serverSchemaVersion) < 5) {
+        alert("加強推廣功能的資料庫尚未完成更新，請稍後再試。");
+        return;
+      }
+      if (!canCurrentUserEditEvent(evt)) {
+        alert("報名這個活動之後就可以設定加強推廣。");
+        return;
+      }
+
+      const nextHighlighted = !isHighlightedEvent(evt);
+      if (nextHighlighted) {
+        const currentCount = eventsData.filter(item =>
+          item.id !== eventId &&
+          !isEventDeleted(item) &&
+          !isEventEnded(item) &&
+          isHighlightedEvent(item)
+        ).length;
+        if (currentCount >= MAX_HIGHLIGHTED_EVENTS) {
+          alert("目前已有 3 個活動正在加強推廣，請先取消其中一個再試。");
+          return;
+        }
+      } else if (!confirm(`確定要取消「${evt.title}」的加強推廣嗎？`)) {
+        return;
+      }
+
+      processingHighlightEventIds.add(eventId);
+      const snapshot = snapshotEventState(evt);
+      evt.isHighlighted = nextHighlighted;
+      const entry = addHistoryLog(
+        evt,
+        nextHighlighted ? "開啟加強推廣" : "取消加強推廣",
+        nextHighlighted ? "highlight" : "unhighlight"
+      );
+      saveLocalEvents();
+      renderEvents();
+      if (isDetailModalOpen()) openDetailModal(eventId);
+
+      const result = await sendPostToGAS({
+        action: "toggleHighlight",
+        eventId: eventId,
+        highlighted: nextHighlighted,
+        historyEntry: entry
+      });
+
+      if (!result.ok) {
+        rollbackEventState(snapshot, `加強推廣設定失敗，已還原。\n\n${result.message}`);
+      } else {
+        showToast(nextHighlighted ? "已開啟加強推廣" : "已取消加強推廣");
+      }
+
+      processingHighlightEventIds.delete(eventId);
+      renderEvents();
+      if (isDetailModalOpen() && eventsData.some(item => item.id === eventId)) {
+        openDetailModal(eventId);
+      }
+    }
+
     // --- 16. DETAIL MODAL, EDITING, @MENTION & DELETE ---
     function openDetailModal(eventId) {
       activeEventId = eventId;
@@ -3698,7 +3859,7 @@ ${pageUrl}`;
         }
         const mentionText = evt.attendees.map(user => `@${user.displayName}`).join(" ");
         safeCopyText(mentionText);
-        showToast("📋 已複製成員標記");
+        showToast("已複製成員標記");
       };
 
       // 完整活動內容分享。
@@ -3720,8 +3881,24 @@ ${isFixedGroup(evt) ? "本週參與" : "已報名成員"}：${memberNames}
 ${getShareableUrl()}`;
 
         safeCopyText(shareText);
-        showToast("📋 已複製活動內容");
+        showToast("已複製活動內容");
       };
+
+      const highlightBtn = document.getElementById("btn-highlight-event");
+      const highlightSupported = isDevMode || Number(serverSchemaVersion) >= 5;
+      const highlighted = isHighlightedEvent(evt);
+      const highlightPending = processingHighlightEventIds.has(evt.id);
+      highlightBtn.classList.toggle("is-active", highlighted);
+      highlightBtn.disabled = highlightPending || !highlightSupported || !canEdit;
+      highlightBtn.innerText = highlightPending
+        ? "設定中..."
+        : (!highlightSupported
+          ? "加強推廣（需更新）"
+          : (highlighted ? "取消加強推廣" : "加強推廣"));
+      highlightBtn.title = !highlightSupported
+        ? "請先更新 GAS 並執行 setupProject()"
+        : (!canEdit ? "報名後即可設定加強推廣" : "全站同時最多三個活動");
+      highlightBtn.onclick = () => toggleEventHighlight(evt.id);
 
       const deleteBtn = document.getElementById("btn-delete-event");
       if (canDelete) {
