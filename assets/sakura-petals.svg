@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="140" viewBox="0 0 360 140" fill="none">
+  <defs>
+    <linearGradient id="petalRose" x1="0" y1="-28" x2="2" y2="1" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFDFE"/>
+      <stop offset="0.48" stop-color="#FCE7F3"/>
+      <stop offset="1" stop-color="#F9A8D4"/>
+    </linearGradient>
+    <linearGradient id="petalBlush" x1="-7" y1="-24" x2="5" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7FA"/>
+      <stop offset="0.58" stop-color="#FBCFE8"/>
+      <stop offset="1" stop-color="#FB7185"/>
+    </linearGradient>
+    <radialGradient id="flowerCore" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="scale(5)">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="0.48" stop-color="#F9A8D4"/>
+      <stop offset="1" stop-color="#BE185D"/>
+    </radialGradient>
+    <g id="petal">
+      <path d="M0 0C-7.8-4.9-11.6-14.6-7.4-22.8C-5.5-26.5-2.3-28.4 0-24.6C2.3-28.4 5.5-26.5 7.4-22.8C11.6-14.6 7.8-4.9 0 0Z" fill="url(#petalRose)" stroke="#F472B6" stroke-width="0.75"/>
+      <path d="M0-1.8C0.4-8.2 0.1-15.1 0-22.4" stroke="#F9A8D4" stroke-width="0.65" stroke-linecap="round" opacity="0.72"/>
+    </g>
+    <g id="petalWarm">
+      <path d="M0 0C-8.2-5.4-10.7-15.8-6.5-23.1C-4.4-26.7-1.6-27.4 0.3-23.9C3.2-27 6-24.8 7.6-21C11.1-12.8 7.2-4.3 0 0Z" fill="url(#petalBlush)" stroke="#FB7185" stroke-width="0.7"/>
+      <path d="M0.2-2C0.5-8.4 0.7-14.7 0.4-21.5" stroke="#F472B6" stroke-width="0.6" stroke-linecap="round" opacity="0.62"/>
+    </g>
+    <g id="blossom">
+      <use href="#petal" transform="rotate(0) scale(.46)"/>
+      <use href="#petal" transform="rotate(72) scale(.46)"/>
+      <use href="#petal" transform="rotate(144) scale(.46)"/>
+      <use href="#petal" transform="rotate(216) scale(.46)"/>
+      <use href="#petal" transform="rotate(288) scale(.46)"/>
+      <circle r="3.2" fill="url(#flowerCore)"/>
+      <circle cx="-1.2" cy="-0.8" r="0.55" fill="#FFF7ED"/>
+      <circle cx="1.3" cy="0.9" r="0.45" fill="#FFF7ED"/>
+    </g>
+  </defs>
+
+  <g opacity="0.95">
+    <use href="#petal" transform="translate(24 22) rotate(-28) scale(.43)"/>
+    <use href="#petalWarm" transform="translate(82 72) rotate(46) scale(.34)"/>
+    <use href="#petal" transform="translate(138 28) rotate(102) scale(.29)"/>
+    <use href="#petalWarm" transform="translate(198 94) rotate(-54) scale(.38)"/>
+    <use href="#petal" transform="translate(252 42) rotate(24) scale(.33)"/>
+    <use href="#petalWarm" transform="translate(328 102) rotate(132) scale(.31)"/>
+    <use href="#petalWarm" transform="translate(12 88) rotate(118) scale(.25)" opacity="0.76"/>
+    <use href="#petal" transform="translate(96 14) rotate(-104) scale(.23)" opacity="0.72"/>
+    <use href="#petalWarm" transform="translate(166 62) rotate(18) scale(.27)" opacity="0.78"/>
+    <use href="#petal" transform="translate(224 128) rotate(-14) scale(.24)" opacity="0.74"/>
+    <use href="#petalWarm" transform="translate(310 64) rotate(68) scale(.22)" opacity="0.7"/>
+    <use href="#petal" transform="translate(52 126) rotate(76) scale(.27)" opacity="0.8"/>
+    <use href="#petalWarm" transform="translate(296 10) rotate(-82) scale(.25)" opacity="0.78"/>
+    <use href="#blossom" transform="translate(112 112) rotate(15) scale(.74)" opacity="0.72"/>
+    <use href="#blossom" transform="translate(350 46) rotate(-10) scale(.58)" opacity="0.62"/>
+  </g>
+</svg>

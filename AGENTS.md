@@ -132,7 +132,7 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 - 全站同時最多 `APP_CONFIG.MAX_HIGHLIGHTED_EVENTS`（3）個仍在顯示中的推廣活動。最終名額必須由 GAS 的 `toggleHighlight_()` 在 Script Lock 內計算；前端檢查只用於提早提示。
 - 開啟與取消都必須寫入活動 `history` 及 `AuditLog`，action type 分別是 `highlight`、`unhighlight`。
 - 一般 `saveEvent` 不可修改既有 `isHighlighted`；只能透過 `toggleHighlight`，避免舊分頁編輯活動時覆蓋推廣狀態。建立新活動也一律從 `false` 開始。
-- 視覺只套在 `.card-summary-bar`：粉紅漸層背景加 CSS 櫻花飄落效果，展開內容維持白底。若活動同時是許願與加強推廣，以加強推廣的粉紅櫻花視覺為準。
+- 視覺只套在 `.card-summary-bar`：粉紅漸層背景加 `assets/sakura-petals.svg` 雙層飄落效果，展開內容維持白底。花瓣資產使用不對稱輪廓、葉脈與柔和漸層，不要改回橢圓 radial-gradient。若活動同時是許願與加強推廣，以加強推廣的粉紅櫻花視覺為準。
 - `prefers-reduced-motion: reduce` 時停用櫻花動畫，但保留粉紅底色。
 
 ### Google 日曆

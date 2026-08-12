@@ -1009,45 +1009,53 @@
       border: 1px solid #ec4899;
     }
 
-    /* 加強推廣：粉紅標題列與兩層飄落櫻花，展開內容仍維持白底易讀性。 */
+    /* 加強推廣：柔和粉紅標題列與手繪 SVG 櫻花，展開內容仍維持白底易讀性。 */
     .event-card.is-highlighted .card-summary-bar,
     .event-card.is-highlighted .card-summary-bar:active,
     .event-card.is-highlighted.is-expanded .card-summary-bar {
-      background: linear-gradient(120deg, #fff1f6 0%, #fbcfe8 48%, #f9a8d4 100%);
+      background:
+        radial-gradient(circle at 88% -12%, rgba(255, 255, 255, 0.92) 0 13%, transparent 34%),
+        radial-gradient(circle at 8% 122%, rgba(244, 114, 182, 0.2) 0 16%, transparent 38%),
+        linear-gradient(118deg, #fff8fb 0%, #fce7f3 48%, #fbcfe8 100%);
       position: relative;
       overflow: hidden;
-      border-bottom-color: rgba(190, 24, 93, 0.2);
+      border-bottom-color: rgba(190, 24, 93, 0.16);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
     }
 
     .event-card.is-highlighted .card-summary-bar::before,
     .event-card.is-highlighted .card-summary-bar::after {
       content: "";
       position: absolute;
-      inset: -45% -10%;
+      inset: -82px -42px;
       z-index: 0;
       pointer-events: none;
-      background-image:
-        radial-gradient(ellipse at center, rgba(255,255,255,0.98) 0 34%, rgba(244,114,182,0.72) 38% 58%, transparent 62%),
-        radial-gradient(ellipse at center, rgba(255,255,255,0.92) 0 32%, rgba(251,113,133,0.68) 37% 57%, transparent 61%),
-        radial-gradient(ellipse at center, rgba(255,255,255,0.96) 0 33%, rgba(236,72,153,0.62) 38% 56%, transparent 61%);
-      background-size: 16px 10px, 13px 9px, 18px 11px;
-      background-position: 8% 10%, 48% 34%, 82% 4%;
-      background-repeat: no-repeat;
-      opacity: 0.9;
-      animation: sakura-drift 5.2s linear infinite;
+      background-image: url("assets/sakura-petals.svg");
+      background-repeat: repeat;
+      background-size: 360px 140px;
+      opacity: 0.78;
+      filter: drop-shadow(0 1px 1px rgba(190, 24, 93, 0.08));
+      will-change: transform;
+      animation: sakura-fall-near 10.8s linear infinite;
     }
 
     .event-card.is-highlighted .card-summary-bar::after {
-      background-size: 12px 8px, 17px 10px, 14px 9px;
-      background-position: 22% 3%, 67% 22%, 94% 42%;
-      opacity: 0.68;
-      animation-duration: 7.4s;
-      animation-delay: -3.1s;
+      inset: -68px -34px;
+      background-size: 285px 111px;
+      background-position: 92px 38px;
+      opacity: 0.4;
+      filter: blur(0.2px);
+      animation: sakura-fall-far 15.6s linear infinite -6.8s;
     }
 
-    @keyframes sakura-drift {
-      from { transform: translate3d(-3%, -18%, 0) rotate(0deg); }
-      to { transform: translate3d(9%, 42%, 0) rotate(26deg); }
+    @keyframes sakura-fall-near {
+      from { transform: translate3d(-18px, -24px, 0) rotate(-2deg); }
+      to { transform: translate3d(24px, 46px, 0) rotate(4deg); }
+    }
+
+    @keyframes sakura-fall-far {
+      from { transform: translate3d(18px, -20px, 0) rotate(3deg) scaleX(-1); }
+      to { transform: translate3d(-22px, 40px, 0) rotate(-3deg) scaleX(-1); }
     }
 
     .event-card.is-highlighted .card-summary-bar > * {
@@ -1088,7 +1096,10 @@
 
     @media (prefers-reduced-motion: reduce) {
       .event-card.is-highlighted .card-summary-bar::before,
-      .event-card.is-highlighted .card-summary-bar::after { animation: none; }
+      .event-card.is-highlighted .card-summary-bar::after {
+        animation: none;
+        transform: none;
+      }
     }
 
     .fixed-time-field {
@@ -1343,7 +1354,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-12T18:12:38+08:00">v260812.1812</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-12T22:09:02+08:00">v260812.2209</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1754,7 +1765,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260812.1812", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260812.2209", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
