@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="430" height="96" viewBox="0 0 430 96" fill="none">
+  <defs>
+    <radialGradient id="iceStar" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="scale(5.5)">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.28" stop-color="#E0F2FE"/>
+      <stop offset="1" stop-color="#93C5FD" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="goldStar" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="scale(4.8)">
+      <stop stop-color="#FFFDF4"/>
+      <stop offset="0.38" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F9A8D4" stop-opacity="0"/>
+    </radialGradient>
+    <g id="sparkleIce">
+      <path d="M0-8C.7-2.4 2.4-.7 8 0C2.4.7.7 2.4 0 8C-.7 2.4-2.4.7-8 0C-2.4-.7-.7-2.4 0-8Z" fill="#E0F2FE"/>
+      <circle r="4.8" fill="url(#iceStar)"/>
+      <circle r="1.05" fill="#FFFFFF"/>
+    </g>
+    <g id="sparkleGold">
+      <path d="M0-7C.55-2.1 2.1-.55 7 0C2.1.55.55 2.1 0 7C-.55 2.1-2.1.55-7 0C-2.1-.55-.55-2.1 0-7Z" fill="#FDE68A"/>
+      <circle r="4.2" fill="url(#goldStar)"/>
+      <circle r="0.9" fill="#FFFDF4"/>
+    </g>
+  </defs>
+
+  <g stroke="#C4B5FD" stroke-width="0.7" stroke-linecap="round" opacity="0.2">
+    <path d="M42 69L73 47L107 61L137 29L168 44"/>
+    <path d="M287 70L311 45L344 57L371 29L400 42"/>
+  </g>
+
+  <g fill="#BFDBFE">
+    <circle cx="18" cy="25" r="1" opacity="0.72"/>
+    <circle cx="50" cy="14" r="0.7" opacity="0.46"/>
+    <circle cx="73" cy="47" r="1.15"/>
+    <circle cx="107" cy="61" r="0.85" opacity="0.76"/>
+    <circle cx="137" cy="29" r="1.2"/>
+    <circle cx="168" cy="44" r="0.9" opacity="0.72"/>
+    <circle cx="194" cy="18" r="0.65" opacity="0.55"/>
+    <circle cx="224" cy="70" r="1.05" opacity="0.72"/>
+    <circle cx="258" cy="34" r="0.7" opacity="0.5"/>
+    <circle cx="287" cy="70" r="0.95" opacity="0.74"/>
+    <circle cx="311" cy="45" r="1.1"/>
+    <circle cx="344" cy="57" r="0.8" opacity="0.72"/>
+    <circle cx="371" cy="29" r="1.2"/>
+    <circle cx="400" cy="42" r="0.85" opacity="0.68"/>
+    <circle cx="418" cy="16" r="0.65" opacity="0.45"/>
+  </g>
+
+  <g fill="#FDE68A">
+    <circle cx="31" cy="83" r="0.7" opacity="0.66"/>
+    <circle cx="121" cy="82" r="0.6" opacity="0.5"/>
+    <circle cx="211" cy="44" r="0.85" opacity="0.72"/>
+    <circle cx="277" cy="14" r="0.65" opacity="0.62"/>
+    <circle cx="392" cy="81" r="0.7" opacity="0.6"/>
+  </g>
+
+  <use href="#sparkleIce" transform="translate(91 20) scale(.72)" opacity="0.84"/>
+  <use href="#sparkleGold" transform="translate(181 69) scale(.55)" opacity="0.78"/>
+  <use href="#sparkleIce" transform="translate(245 22) scale(.48)" opacity="0.7"/>
+  <use href="#sparkleGold" transform="translate(356 77) scale(.68)" opacity="0.82"/>
+</svg>
