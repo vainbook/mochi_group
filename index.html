@@ -1343,7 +1343,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-12T16:13:47+08:00">v260812.1613</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-12T17:29:36+08:00">v260812.1729</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1754,14 +1754,18 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260812.1613", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260812.1729", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
       VERSION_MANIFEST_URL: "version.json",
-      DATA_SYNC_INTERVAL_MS: 12000,
-      READ_TIMEOUT_MS: 45000,
-      WRITE_TIMEOUT_MS: 60000,
+      DATA_SYNC_INTERVAL_MS: 20000,
+      // GAS 讀取已改成幾乎全部命中快取（約 1～3 秒）。逾時值不可再放到幾十秒，
+      // 否則單一次卡住的請求會讓畫面等將近一分鐘；直接放棄、下一輪同步重試更快。
+      READ_TIMEOUT_MS: 20000,
+      WRITE_TIMEOUT_MS: 30000,
+      // 未確認的寫入超過這個時間仍沒結果，就不再擋住讀取，避免畫面永久停在舊資料。
+      PENDING_MUTATION_READ_BLOCK_MS: 45000,
       VERSION_CHECK_INTERVAL_MS: 60000,
       STORAGE_KEY: "line_events_v6",
       USER_CACHE_KEY: "line_user_profile_v2",
@@ -2230,7 +2234,8 @@
       setSyncClockPrompt("syncing", "正在重新整理最新活動...");
 
       try {
-        if (hasPendingMutationForActiveProfile()) await retryPendingMutations();
+        // 重試不可 await：一筆卡住的寫入會讓「重新整理」硬等到寫入逾時（幾十秒）。
+        // fetchRemoteDataFromGAS() 內部已經會觸發重試。
         const isSuccess = await fetchRemoteDataFromGAS();
         renderEvents();
         if (isSuccess) {
@@ -2641,7 +2646,14 @@
     // --- 4. GOOGLE SHEETS / GAS API SYNC (DEFENSIVE PARSING & TIMEOUT) ---
     function fetchRemoteDataFromGAS() {
       // 尚有未確認操作時先完成同 mutationId 重試，避免舊 GET 把畫面蓋回去。
-      if (hasPendingMutationForActiveProfile()) return Promise.resolve(false);
+      // 但重試一直失敗時不能永久擋住讀取，超過 PENDING_MUTATION_READ_BLOCK_MS
+      // 就照常讀雲端，否則整個畫面會停在本機資料直到那筆紀錄過期。
+      if (hasPendingMutationForActiveProfile()) {
+        retryPendingMutations();
+        if (!hasPendingMutationForActiveProfile(CONFIG.PENDING_MUTATION_READ_BLOCK_MS)) {
+          return Promise.resolve(false);
+        }
+      }
       if (remoteFetchInFlight) return remoteFetchInFlight;
       remoteFetchInFlight = performRemoteDataFetch()
         .finally(() => { remoteFetchInFlight = null; });
@@ -2838,7 +2850,8 @@
       savePendingMutations(items);
     }
 
-    function hasPendingMutationForActiveProfile() {
+    // olderThanMs 有值時，只回報「已經卡住超過這段時間」的未確認操作。
+    function hasPendingMutationForActiveProfile(olderThanMs) {
       let activeUserId = String(currentUser?.userId || "");
       if (!activeUserId) {
         try {
@@ -2847,8 +2860,10 @@
         } catch (error) {}
       }
       if (!activeUserId) return false;
+      const minAge = Number(olderThanMs || 0);
       return loadPendingMutations().some(item =>
-        String(item.payload.actorUserId || "") === activeUserId
+        String(item.payload.actorUserId || "") === activeUserId &&
+        (minAge <= 0 || Date.now() - Number(item.createdAt || 0) > minAge)
       );
     }
 

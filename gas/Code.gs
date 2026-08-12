@@ -76,8 +76,12 @@ const APP_CONFIG = Object.freeze({
   WISH_MIN_ATTENDEES: 3,
   // 全站同時最多只能有三個仍在顯示中的加強推廣活動。
   MAX_HIGHLIGHTED_EVENTS: 3,
-  // 公開活動列表採短期快取；任何成功寫入都會立即清除。
-  PUBLIC_CACHE_TTL_SECONDS: 20,
+  // 公開活動列表採快取。開啟 Spreadsheet 是整個 doGet 最貴的一步，
+  // 所以改成「寫入後立刻重建快取」，讀取幾乎永遠只命中快取。
+  // TTL 留一小時當保險：萬一有寫入路徑忘了重建，最久一小時後也會自然重讀。
+  PUBLIC_CACHE_TTL_SECONDS: 3600,
+  // 保溫觸發器間隔，讓快取過期的重建成本由觸發器付掉，不要落在使用者的讀取上。
+  PUBLIC_CACHE_WARM_MINUTES: 15,
   PUBLIC_CACHE_CHUNK_SIZE: 20000,
   PUBLIC_CACHE_META_KEY: "public_events_v5_meta",
   PUBLIC_CACHE_CHUNK_PREFIX: "public_events_v5_chunk_",
@@ -194,7 +198,7 @@ function setGoogleCalendar() {
     [APP_CONFIG.CALENDAR_ID_PROPERTY]: calendarId,
     [APP_CONFIG.CALENDAR_NAME_PROPERTY]: calendar.getName()
   });
-  invalidatePublicPayloadCache_();
+  refreshPublicPayloadCacheQuietly_();
   ui.alert("已連結 Google 日曆「" + calendar.getName() + "」，寫入權限測試通過。可再執行「同步現有未過期活動」。");
 }
 
@@ -305,7 +309,7 @@ function syncAllExistingEventsToCalendar() {
       syncedCount += 1;
     });
     SpreadsheetApp.flush();
-    invalidatePublicPayloadCache_();
+    refreshPublicPayloadCacheQuietly_();
     ui.alert("日曆同步完成：" + syncedCount + " 筆已同步，" + skippedCount + " 筆已跳過。");
   } finally {
     lock.releaseLock();
@@ -414,7 +418,7 @@ function setupProject() {
       SCHEMA_VERSION: APP_CONFIG.SCHEMA_VERSION
     });
     SpreadsheetApp.flush();
-    invalidatePublicPayloadCache_();
+    refreshPublicPayloadCacheQuietly_(spreadsheet);
     return {
       status: "success",
       message: "Events、EventsArchive 與 AuditLog 已完成初始化，表格結構版本為 " +
@@ -443,24 +447,7 @@ function doGet(e) {
   try {
     const cachedPayload = getCachedPublicPayload_();
     if (cachedPayload) return jsonTextOutput_(cachedPayload);
-
-    const spreadsheet = getSpreadsheet_();
-    const eventsSheet = getRequiredSheetFromSpreadsheet_(spreadsheet, APP_CONFIG.EVENTS_SHEET);
-    const schemaReady = hasRequiredHeaders_(eventsSheet, EVENT_HEADERS);
-    // 只回傳仍需顯示的活動。已過期與已刪除一律不送，
-    // 避免資料量隨時間無限累積，也不再對外公開已刪除活動的名單。
-    const events = readAllEvents_(eventsSheet)
-      .filter(eventItem => !isRetiredEvent_(eventItem));
-
-    const responsePayload = {
-      status: "success",
-      schemaVersion: schemaReady ? APP_CONFIG.SCHEMA_VERSION : "1",
-      serverTime: new Date().toISOString(),
-      calendar: getCalendarPublicInfo_(),
-      events: events
-    };
-    putCachedPublicPayload_(JSON.stringify(responsePayload));
-    return jsonOutput_(responsePayload);
+    return jsonTextOutput_(refreshPublicPayloadCache_());
   } catch (error) {
     return errorOutput_(error);
   }
@@ -536,7 +523,7 @@ function doPost(e) {
     }
 
     SpreadsheetApp.flush();
-    invalidatePublicPayloadCache_();
+    refreshPublicPayloadCacheQuietly_(spreadsheet);
     return jsonOutput_(Object.assign({
       status: "success",
       mutationId: payload.mutationId || "",
@@ -1544,6 +1531,68 @@ function putCachedPublicPayload_(jsonText) {
   }
 }
 
+/**
+ * 依 Sheet 現況組出公開活動回應的 JSON 文字。
+ * 只回傳仍需顯示的活動。已過期與已刪除一律不送，
+ * 避免資料量隨時間無限累積，也不再對外公開已刪除活動的名單。
+ */
+function buildPublicPayloadText_(spreadsheet) {
+  const eventsSheet = getRequiredSheetFromSpreadsheet_(spreadsheet, APP_CONFIG.EVENTS_SHEET);
+  const schemaReady = hasRequiredHeaders_(eventsSheet, EVENT_HEADERS);
+  const events = readAllEvents_(eventsSheet)
+    .filter(eventItem => !isRetiredEvent_(eventItem));
+
+  return JSON.stringify({
+    status: "success",
+    schemaVersion: schemaReady ? APP_CONFIG.SCHEMA_VERSION : "1",
+    serverTime: new Date().toISOString(),
+    calendar: getCalendarPublicInfo_(),
+    events: events
+  });
+}
+
+/**
+ * 重新讀 Sheet、重建快取，並回傳這次產生的 JSON 文字。
+ * 寫入流程要用這支而不是只清快取：開啟 Spreadsheet 那一步實測要 8～30 秒，
+ * 寫入時本來就已經付過，趁同一次執行重建等於免費；若只清掉，
+ * 這筆成本會轉嫁給下一個讀取的使用者，畫面就會卡幾十秒。
+ *
+ * ponytail: 這只是把「開啟試算表很慢」的成本從讀取移到寫入，沒有消除它。
+ * 實測（2026-08-12）：跳過開檔的路徑 1～3 秒，開檔的路徑 8～30 秒。
+ * 成因未確認，且**不是**資料量 —— 當時 Events 13 列、AuditLog 245 列。
+ * 要繼續追就看 Apps Script 執行紀錄的「持續時間」：
+ * 本身就 20 秒 → 腳本真的慢；只有 1～2 秒 → 慢在平台排隊，與本專案資料無關。
+ */
+function refreshPublicPayloadCache_(existingSpreadsheet) {
+  try {
+    const jsonText = buildPublicPayloadText_(existingSpreadsheet || getSpreadsheet_());
+    putCachedPublicPayload_(jsonText);
+    return jsonText;
+  } catch (error) {
+    // 重建失敗時一定要清掉舊快取，否則長 TTL 會讓過期名單一直被送出去。
+    invalidatePublicPayloadCache_();
+    throw error;
+  }
+}
+
+// 寫入路徑用：快取重建失敗不該把已經成功的寫入回報成失敗。
+function refreshPublicPayloadCacheQuietly_(existingSpreadsheet) {
+  try {
+    refreshPublicPayloadCache_(existingSpreadsheet);
+  } catch (error) {
+    console.warn("公開活動快取重建失敗：" + String(error && error.message ? error.message : error));
+  }
+}
+
+/**
+ * 快取保溫觸發器。快取還在就直接結束（只花不到一秒），
+ * 只有真的不見了才重建，讓「剛好過期」的成本由觸發器付掉。
+ */
+function warmPublicPayloadCache() {
+  if (getCachedPublicPayload_()) return;
+  refreshPublicPayloadCacheQuietly_();
+}
+
 function invalidatePublicPayloadCache_() {
   try {
     const cache = CacheService.getScriptCache();
@@ -1715,7 +1764,7 @@ function archiveRetiredEvents() {
     retiredRowNumbers.slice().reverse().forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
 
     SpreadsheetApp.flush();
-    invalidatePublicPayloadCache_();
+    refreshPublicPayloadCacheQuietly_(spreadsheet);
     return { moved: retiredRows.length, remaining: Math.max(eventsSheet.getLastRow() - 1, 0) };
   } finally {
     lock.releaseLock();
@@ -1787,7 +1836,7 @@ function cleanupExpiredWishes() {
       .forEach(rowNumber => eventsSheet.deleteRow(rowNumber));
 
     SpreadsheetApp.flush();
-    invalidatePublicPayloadCache_();
+    refreshPublicPayloadCacheQuietly_(spreadsheet);
     return { fulfilled: fulfilledRows.length, removed: doomedRowNumbers.length };
   } finally {
     lock.releaseLock();
@@ -1827,7 +1876,7 @@ function getOrCreateArchiveSheet_(spreadsheet, headers) {
  * 建立每日歸檔觸發器，重複執行不會產生多個觸發器。
  */
 function installArchiveTrigger_() {
-  const handlers = ["archiveRetiredEvents", "cleanupExpiredWishes"];
+  const handlers = ["archiveRetiredEvents", "cleanupExpiredWishes", "warmPublicPayloadCache"];
   ScriptApp.getProjectTriggers()
     .filter(trigger => handlers.indexOf(trigger.getHandlerFunction()) >= 0)
     .forEach(trigger => ScriptApp.deleteTrigger(trigger));
@@ -1843,6 +1892,12 @@ function installArchiveTrigger_() {
     .timeBased()
     .everyDays(1)
     .atHour(0)
+    .create();
+
+  // 公開活動快取保溫，讓使用者的讀取幾乎永遠命中快取。
+  ScriptApp.newTrigger("warmPublicPayloadCache")
+    .timeBased()
+    .everyMinutes(APP_CONFIG.PUBLIC_CACHE_WARM_MINUTES)
     .create();
 }
 

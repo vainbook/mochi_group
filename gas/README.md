@@ -49,6 +49,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `doGet` 過濾 | 已刪除與過期活動不回傳給前端。 |
 | 每日自動歸檔 | 凌晨 4 點把已刪除與過期活動搬到 `EventsArchive`，並從 `Events` 移除。 |
 | 許願午夜結算 | 每日 00 點結算許願活動，未達標者整列刪除且**不歸檔**。 |
+| 快取保溫 | 每 15 分鐘檢查公開活動快取，不見了才重建（`warmPublicPayloadCache`）。 |
 
 「過期」定義為**活動開始時間 + 2 小時**，所以活動進行中仍看得到，結束後才消失。
 
@@ -104,7 +105,8 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 
 ## 同步與權限規則
 
-- `doGet` 會將公開活動回應放入 20 秒 Script Cache；任何成功寫入、歸檔或許願結算都會立即清除，因此快取不會蓋住新的報名結果。Cache 只是加速層，遺失時會直接讀取 Sheet。
+- `doGet` 命中 Script Cache 就直接回傳（約 1～3 秒）；沒命中才開啟 Sheet 重建（實測 8～30 秒，取決於試算表大小與當下負載）。快取 TTL 一小時。
+- 任何成功寫入、歸檔或許願結算都會**當場重建快取**（`refreshPublicPayloadCacheQuietly_`），不是只清除，所以新的報名結果會立刻生效，且下一位讀取者不必幫大家付重建的時間。另有 15 分鐘一次的 `warmPublicPayloadCache` 負責補上快取被系統提早清掉的情形。
 - 每個 POST 只開啟一次 Spreadsheet，再取得 `Events` 與 `AuditLog`。mutationId 先查六小時快取，再檢查 AuditLog 最近 500 列，降低長期稽核資料造成的延遲。
 - `saveEvent`：建立或更新活動。編輯內容開放給**主揪、管理員與任何已報名成員**；但 `eventAction = handoff`（交棒主揪）另外用 `assertHandoffPermission_` 驗證，仍只有主揪與管理員可執行。
 - 許願活動（`isWish = TRUE`）由午夜觸發器 `cleanupExpiredWishes` 結算：建立滿 3 個日曆天時，當下報名人數超過 3 人則轉為一般活動，否則整列硬刪除且不進 `EventsArchive`。刪除前會先移除對應的 Google 日曆行程。

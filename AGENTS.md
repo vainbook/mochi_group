@@ -170,7 +170,10 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 ## 同步、更新與快取
 
 - 前端會定期同步 GAS 資料與檢查 `version.json`，並使用 `_ts` 與 `cache: "no-store"` 降低 LINE 內建瀏覽器快取影響。
-- GAS `doGet` 使用 Script Cache 暫存公開回應 20 秒，因單鍵上限而切成 20,000 字元一段；任何成功寫入、歸檔、許願結算或初始化都要呼叫 `invalidatePublicPayloadCache_()`。Cache 可能提早消失，cache miss 必須正常回退讀取 Sheet。
+- GAS `doGet` 只做兩件事：命中 Script Cache 就直接回傳，沒有才讀 Sheet。快取 TTL 一小時，因單鍵上限而切成 20,000 字元一段。
+- **開啟 Spreadsheet 是 `doGet` 唯一的效能瓶頸（實測 cache miss 8～30 秒，cache hit 約 1～3 秒）。** 因此任何成功寫入、歸檔、許願結算或初始化都必須呼叫 `refreshPublicPayloadCacheQuietly_(spreadsheet)` 直接重建快取，**不可只清掉快取** —— 只清掉會把那 8～30 秒轉嫁給下一個開啟頁面的使用者。寫入時 Spreadsheet 已經開好，重建幾乎免費。
+- `warmPublicPayloadCache` 每 15 分鐘保溫一次：快取還在就立刻結束，只有真的不見了才重建，讓「快取剛好過期」的成本由觸發器付掉。改 schema 或新增觸發器後要重跑 `setupProject()`。
+- 前端讀寫逾時不可再放大到幾十秒。GAS 正常回應是 1～3 秒；逾時值一大，單一次卡住的請求就會讓使用者等將近一分鐘，放棄後等下一輪同步反而更快。
 - GAS 的 POST 每次只可呼叫一次 `getSpreadsheet_()`，再從同一個 Spreadsheet 取得 Events 與 AuditLog，避免重複開啟遠端文件。
 - `hasProcessedMutation_()` 先查六小時 mutation Cache，再只掃 AuditLog 最近 500 列。前端重試必須沿用原 `mutationId`，不得為同一操作產生新 ID。
 - 「重新整理」按鈕是資料同步，不等於強制重載 HTML。前端版本變更由 `version.json` 自動偵測。
