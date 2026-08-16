@@ -1123,6 +1123,26 @@
       flex-shrink: 0;
     }
 
+    .detail-attendee-heading-row,
+    .detail-history-heading-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .detail-history-heading-row {
+      margin-bottom: 6px;
+    }
+
+    @media (max-width: 480px) {
+      .detail-member-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .event-card.is-highlighted .card-summary-bar::before,
       .event-card.is-highlighted .card-summary-bar::after {
@@ -1245,18 +1265,46 @@
 
     /* 留言與系統紀錄視覺區隔 */
     .history-comment {
-      background: #f0fdf4;
-      border-left: 3px solid var(--line-green);
-      border-radius: 0 8px 8px 0;
-      padding: 8px 10px;
-      margin: 4px 0;
-      border-bottom: none;
+      background: linear-gradient(135deg, #ecfdf5 0%, #f8fffb 100%);
+      border: 1px solid #a7f3d0;
+      border-left: 4px solid var(--line-green);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin: 8px 0;
+      box-shadow: 0 3px 10px rgba(6, 199, 85, 0.1);
+    }
+
+    .history-comment-header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .history-comment-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--line-green-dark);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
+
+    .history-comment .history-meta {
+      color: #087a3d;
     }
 
     .history-comment-text {
-      margin-top: 3px;
+      margin-top: 7px;
       color: #0f172a;
-      font-size: 13px;
+      font-size: 13.5px;
+      font-weight: 600;
+      line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -1383,7 +1431,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-13T00:24:44+08:00">v260813.0024</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-16T16:01:16+08:00">v260816.1601</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1678,7 +1726,7 @@
         </div>
 
         <div style="margin-bottom:14px;">
-          <div style="font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+          <div class="detail-attendee-heading-row" style="font-weight:700; color:#475569; margin-bottom:6px;">
             <span><span id="detail-attendee-heading">已報名成員名冊</span> (<span id="detail-capacity-text" style="color:var(--line-green); font-weight:bold;">0/0</span>)：</span>
             <span class="detail-member-actions">
               <button id="btn-mention-attendees" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
@@ -1690,6 +1738,9 @@
               <button id="btn-highlight-event" class="line-btn btn-highlight" style="padding:4px 8px; font-size:12px;">
                 加強推廣
               </button>
+              <button id="btn-add-personal-calendar" class="line-btn btn-calendar" style="padding:4px 8px; font-size:12px;">
+                加到我的日曆
+              </button>
             </span>
           </div>
           <div id="detail-attendees" style="background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0; max-height:140px; overflow-y:auto; display:flex; flex-wrap:wrap; gap:6px;">
@@ -1699,7 +1750,12 @@
 
         <!-- History Update Logs -->
         <div>
-          <div style="font-weight:700; color:#475569; margin-bottom:6px;">活動完整紀錄（<span id="detail-history-count">0</span>）：</div>
+          <div class="detail-history-heading-row" style="font-weight:700; color:#475569;">
+            <span>活動完整紀錄（<span id="detail-history-count">0</span>）：</span>
+            <button id="btn-comment-event" class="line-btn btn-calendar" type="button" style="padding:4px 10px; font-size:12px;">
+              新增留言
+            </button>
+          </div>
           <div id="detail-history-list" class="history-box" aria-live="polite">
             <!-- History log items -->
           </div>
@@ -1794,7 +1850,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260813.0024", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260816.1601", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2011,6 +2067,7 @@
     // 與 GAS 的 EVENT_GRACE_MS 一致：結束後 2 小時才算過期，
     // 活動進行中仍看得到。固定團永遠不會過期。
     const EVENT_GRACE_MS = 2 * 60 * 60 * 1000;
+    const PERSONAL_CALENDAR_DURATION_MS = 2 * 60 * 60 * 1000;
 
     function isEventEnded(evt) {
       if (isFixedGroup(evt)) return false;
@@ -3426,7 +3483,6 @@
           actionButtonsHtml = `<button class="line-btn btn-join rsvp-action">參加活動</button>`;
         }
 
-        // 固定團也能留言，所以不分活動類型都顯示。
         const commentHtml = `<button class="line-btn btn-calendar comment-action" type="button">活動留言</button>`;
 
         cardEl.innerHTML = `
@@ -3493,8 +3549,7 @@
         const rsvpButton = cardEl.querySelector(".rsvp-action");
         if (rsvpButton) rsvpButton.onclick = () => toggleRSVP(evt.id);
         cardEl.querySelector(".detail-action").onclick = () => openDetailModal(evt.id);
-        const commentButton = cardEl.querySelector(".comment-action");
-        if (commentButton) commentButton.onclick = () => openCommentModal(evt.id);
+        cardEl.querySelector(".comment-action").onclick = () => openCommentModal(evt.id);
 
         listEl.appendChild(cardEl);
       });
@@ -3789,6 +3844,52 @@ ${pageUrl}`;
 
     function buildCalendarSubscribeUrl(calendarId) {
       return `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(calendarId)}`;
+    }
+
+    function formatGoogleCalendarTimestamp(dateValue) {
+      return dateValue.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    }
+
+    function buildPersonalCalendarEventUrl(evt) {
+      if (!evt || isFixedGroup(evt)) return "";
+      const start = parseSafeDate(evt.datetime);
+      if (isNaN(start.getTime())) return "";
+
+      const end = new Date(start.getTime() + PERSONAL_CALENDAR_DURATION_MS);
+      const hostName = evt.hostName || evt.hostUser?.displayName || "未指定";
+      const details = [
+        evt.description || "",
+        `費用：${evt.fee || "免費"}`,
+        `主揪：${hostName}`,
+        `活動頁面：${getShareableUrl()}`
+      ].filter(Boolean).join("\n");
+      const params = new URLSearchParams({
+        action: "TEMPLATE",
+        text: evt.title || "群組活動",
+        dates: `${formatGoogleCalendarTimestamp(start)}/${formatGoogleCalendarTimestamp(end)}`,
+        details: details,
+        location: normalizeLocation(evt.location),
+        ctz: "Asia/Taipei"
+      });
+      return `https://calendar.google.com/calendar/render?${params.toString()}`;
+    }
+
+    function openPersonalCalendarEvent(evt) {
+      const calendarUrl = buildPersonalCalendarEventUrl(evt);
+      if (!calendarUrl) {
+        alert("這個活動沒有可用的日期時間，無法加到 Google 日曆。");
+        return;
+      }
+
+      if (isLiffReady && typeof liff !== "undefined" && typeof liff.openWindow === "function") {
+        try {
+          liff.openWindow({ url: calendarUrl, external: true });
+          return;
+        } catch (error) {
+          console.warn("LIFF 開啟 Google 日曆失敗，改用瀏覽器開啟", error);
+        }
+      }
+      window.open(calendarUrl, "_blank", "noopener,noreferrer");
     }
 
     function openCalendarModal() {
@@ -4104,13 +4205,22 @@ ${pageUrl}`;
       } else {
         historyEl.innerHTML = evt.history.map(log => {
           const isComment = String(log.type || "") === "comment";
+          if (isComment) {
+            return `
+              <div class="history-item history-comment">
+                <div class="history-comment-header">
+                  <span class="history-comment-badge">留言</span>
+                  <span class="history-meta">${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>
+                </div>
+                <div class="history-comment-text">${escapeHtml(log.action)}</div>
+              </div>
+            `;
+          }
           return `
-          <div class="history-item${isComment ? " history-comment" : ""}">
-            <span class="history-meta">${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>${isComment ? "" : "："}${isComment
-              ? `<div class="history-comment-text">${escapeHtml(log.action)}</div>`
-              : escapeHtml(log.action)}
-          </div>
-        `;
+            <div class="history-item">
+              <span class="history-meta">${escapeHtml(log.author)} (${escapeHtml(log.time)})</span>：${escapeHtml(log.action)}
+            </div>
+          `;
         }).join("");
       }
 
@@ -4165,6 +4275,19 @@ ${getShareableUrl()}`;
         safeCopyText(shareText);
         showToast("已複製活動內容");
       };
+
+      // 只在個人的 Google 日曆建立一筆行程，不寫入 GAS 或群組共用日曆。
+      const personalCalendarBtn = document.getElementById("btn-add-personal-calendar");
+      const personalCalendarUrl = buildPersonalCalendarEventUrl(evt);
+      personalCalendarBtn.style.display = isFixedGroup(evt) ? "none" : "inline-flex";
+      personalCalendarBtn.disabled = !personalCalendarUrl;
+      personalCalendarBtn.title = personalCalendarUrl
+        ? "開啟 Google 日曆並新增這筆活動"
+        : "這個活動沒有可用的日期時間";
+      personalCalendarBtn.onclick = () => openPersonalCalendarEvent(evt);
+
+      // 留言是活動紀錄的一部分，所以入口放在完整紀錄旁。
+      document.getElementById("btn-comment-event").onclick = () => openCommentModal(evt.id);
 
       const highlightBtn = document.getElementById("btn-highlight-event");
       const highlightSupported = isDevMode || Number(serverSchemaVersion) >= 5;
