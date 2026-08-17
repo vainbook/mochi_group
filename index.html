@@ -1431,7 +1431,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-16T16:01:16+08:00">v260816.1601</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-08-17T22:53:17+08:00">v260817.2253</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1850,7 +1850,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260816.1601", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260817.2253", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2064,16 +2064,24 @@
     const WISH_MIN_ATTENDEES = 3;
     const MAX_HIGHLIGHTED_EVENTS = 3;
 
-    // 與 GAS 的 EVENT_GRACE_MS 一致：結束後 2 小時才算過期，
-    // 活動進行中仍看得到。固定團永遠不會過期。
-    const EVENT_GRACE_MS = 2 * 60 * 60 * 1000;
-    const PERSONAL_CALENDAR_DURATION_MS = 2 * 60 * 60 * 1000;
+    // 一般活動開始 2 小時後視為已過期，停止報名但仍保留在列表 24 小時。
+    // 保留期結束後才從網站隱藏；固定團永遠不會過期或退場。
+    const EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
+    const EXPIRED_EVENT_DISPLAY_MS = 24 * 60 * 60 * 1000;
+    const PERSONAL_CALENDAR_DURATION_MS = EVENT_DURATION_MS;
 
     function isEventEnded(evt) {
       if (isFixedGroup(evt)) return false;
       const start = parseSafeDate(evt.datetime);
       if (isNaN(start.getTime())) return false;
-      return start.getTime() + EVENT_GRACE_MS < Date.now();
+      return start.getTime() + EVENT_DURATION_MS < Date.now();
+    }
+
+    function isEventRetired(evt) {
+      if (isFixedGroup(evt)) return false;
+      const start = parseSafeDate(evt.datetime);
+      if (isNaN(start.getTime())) return false;
+      return start.getTime() + EVENT_DURATION_MS + EXPIRED_EVENT_DISPLAY_MS < Date.now();
     }
 
     function getEventTimeText(evt) {
@@ -3406,10 +3414,10 @@
         });
       
       // 三個分類是獨立開關，顯示所有被開啟分類的聯集。
-      // 過期活動由 GAS 過濾並歸檔，這裡仍擋一次，
-      // 避免活動剛好在兩次同步之間結束。
+      // 已過期活動保留顯示 24 小時；超過保留期才由 GAS 過濾並歸檔。
+      // 前端仍擋一次，避免活動剛好在兩次同步之間到達退場時間。
       const filteredEvents = sortedEvents.filter(evt => {
-        if (isEventEnded(evt)) return false;
+        if (isEventRetired(evt)) return false;
         if (isFixedGroup(evt)) return activeFilters.has("fixed");
         if (isWishEvent(evt)) return activeFilters.has("wish");
         return activeFilters.has("open");

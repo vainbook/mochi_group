@@ -67,9 +67,10 @@ const APP_CONFIG = Object.freeze({
   // AuditLog 仍保存完整紀錄。留言也計入這個上限。
   MAX_EVENT_HISTORY: 50,
   MAX_COMMENT_LENGTH: 150,
-  // 活動結束後多久才視為過期並移出前端資料。
-  // 給 2 小時緩衝，活動進行中仍看得到。
-  EVENT_GRACE_MS: 2 * 60 * 60 * 1000,
+  // 一般活動開始 2 小時後視為已過期；已過期活動再保留顯示 24 小時。
+  // 保留期結束後才從公開資料移除並等待歸檔。
+  EVENT_DURATION_MS: 2 * 60 * 60 * 1000,
+  EXPIRED_EVENT_RETENTION_MS: 24 * 60 * 60 * 1000,
   // 許願活動：建立後滿 WISH_LIFESPAN_DAYS 個「日曆天」於午夜結算，
   // 報名人數超過 WISH_MIN_ATTENDEES 才成立，否則整列硬刪除、不歸檔。
   WISH_LIFESPAN_DAYS: 3,
@@ -83,8 +84,9 @@ const APP_CONFIG = Object.freeze({
   // 保溫觸發器間隔，讓快取過期的重建成本由觸發器付掉，不要落在使用者的讀取上。
   PUBLIC_CACHE_WARM_MINUTES: 15,
   PUBLIC_CACHE_CHUNK_SIZE: 20000,
-  PUBLIC_CACHE_META_KEY: "public_events_v5_meta",
-  PUBLIC_CACHE_CHUNK_PREFIX: "public_events_v5_chunk_",
+  // 退場規則調整時更新命名空間，避免新部署沿用舊版已過濾的快取內容。
+  PUBLIC_CACHE_META_KEY: "public_events_retention24_v1_meta",
+  PUBLIC_CACHE_CHUNK_PREFIX: "public_events_retention24_v1_chunk_",
   // mutationId 只需回查近期紀錄；前端重試都會在短時間內發生。
   MUTATION_LOOKBACK_ROWS: 500,
   MUTATION_CACHE_SECONDS: 21600,
@@ -894,7 +896,8 @@ function countActiveHighlightedEvents_(events, excludedEventId) {
   return (Array.isArray(events) ? events : []).filter(item =>
     String(item.id || "") !== String(excludedEventId || "") &&
     item.isHighlighted === true &&
-    !isRetiredEvent_(item)
+    !isDeletedEvent_(item) &&
+    !isEventEnded_(item)
   ).length;
 }
 
@@ -1533,7 +1536,7 @@ function putCachedPublicPayload_(jsonText) {
 
 /**
  * 依 Sheet 現況組出公開活動回應的 JSON 文字。
- * 只回傳仍需顯示的活動。已過期與已刪除一律不送，
+ * 只回傳仍需顯示的活動。已刪除與超過過期保留期的活動一律不送，
  * 避免資料量隨時間無限累積，也不再對外公開已刪除活動的名單。
  */
 function buildPublicPayloadText_(spreadsheet) {
@@ -1571,7 +1574,7 @@ function refreshPublicPayloadCache_(existingSpreadsheet) {
     putCachedPublicPayload_(jsonText);
     return jsonText;
   } catch (error) {
-    // 重建失敗時一定要清掉舊快取，否則長 TTL 會讓過期名單一直被送出去。
+    // 重建失敗時一定要清掉舊快取，否則長 TTL 會讓已退場名單一直被送出去。
     invalidatePublicPayloadCache_();
     throw error;
   }
@@ -1704,19 +1707,30 @@ function isCalendarEventLive_(calendar, calendarEvent) {
   }
 }
 
+function isEventEnded_(eventItem) {
+  if (!eventItem) return false;
+  if (eventItem.isFixedGroup === true) return false;
+
+  const startTime = parseCalendarStartTime_(eventItem.datetime);
+  if (!startTime) return false;
+  return startTime.getTime() + APP_CONFIG.EVENT_DURATION_MS < Date.now();
+}
+
 /**
- * 判斷活動是否已「退場」：已刪除，或結束超過緩衝時間。
+ * 判斷活動是否已「退場」：已刪除，或過期後已超過公開保留時間。
  * 固定團沒有結束時間，永遠不會退場。
  * 時間無法解析的活動一律保留，避免格式問題造成資料被誤搬。
  */
 function isRetiredEvent_(eventItem) {
   if (!eventItem) return false;
   if (isDeletedEvent_(eventItem)) return true;
-  if (eventItem.isFixedGroup === true) return false;
+  if (!isEventEnded_(eventItem)) return false;
 
   const startTime = parseCalendarStartTime_(eventItem.datetime);
   if (!startTime) return false;
-  return startTime.getTime() + APP_CONFIG.EVENT_GRACE_MS < Date.now();
+  return startTime.getTime()
+    + APP_CONFIG.EVENT_DURATION_MS
+    + APP_CONFIG.EXPIRED_EVENT_RETENTION_MS < Date.now();
 }
 
 /**
@@ -1910,7 +1924,7 @@ function archiveRetiredEventsFromMenu() {
     "歸檔完成",
     "已搬移 " + result.moved + " 筆到「" + APP_CONFIG.ARCHIVE_SHEET + "」。\n" +
     "Events 目前剩下 " + result.remaining + " 筆。\n\n" +
-    "搬移對象：已刪除的活動，以及結束超過 2 小時的一般活動。固定團不會被搬移。",
+    "搬移對象：已刪除的活動，以及過期後已保留滿 24 小時的一般活動。固定團不會被搬移。",
     ui.ButtonSet.OK
   );
 }
@@ -1927,7 +1941,7 @@ function getCalendarTimeRange_(eventItem) {
   if (!startTime) return null;
   return {
     startTime: startTime,
-    endTime: new Date(startTime.getTime() + 2 * 60 * 60 * 1000)
+    endTime: new Date(startTime.getTime() + APP_CONFIG.EVENT_DURATION_MS)
   };
 }
 

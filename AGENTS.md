@@ -158,11 +158,11 @@ Google Sheet 內有三張工作表：`Events`（目前顯示中的活動）、`E
 
 - 活動列的 `history` 上限為 `APP_CONFIG.MAX_EVENT_HISTORY`（50 筆，含留言），由 `trimEventHistory_()` 強制。固定團永遠不會過期也不會被歸檔，沒有這道上限它會無限膨脹。完整紀錄保存在 `AuditLog`。
 - 許願活動未達標時整列硬刪除，是唯一不進 `EventsArchive` 的例外，見〈許願活動〉。
-- `doGet` 只回傳仍需顯示的活動，已刪除與已過期一律不送（`isRetiredEvent_()`）。不得恢復 `includeDeleted` 參數，那會讓任何拿到 `/exec` 網址的人取得已刪除活動的成員名單。
-- 已刪除與過期活動由每日觸發器 `archiveRetiredEvents()` 搬到 `EventsArchive`，並從 `Events` 移除該列。固定團與時間無法解析的活動一律不搬。
+- `doGet` 只回傳仍需顯示的活動，已刪除與已超過 24 小時保留期的過期活動一律不送（`isRetiredEvent_()`）。不得恢復 `includeDeleted` 參數，那會讓任何拿到 `/exec` 網址的人取得已刪除活動的成員名單。
+- 已刪除與已超過保留期的過期活動由每日觸發器 `archiveRetiredEvents()` 搬到 `EventsArchive`，並從 `Events` 移除該列。固定團與時間無法解析的活動一律不搬。
 - 搬進歸檔表前必須**依歸檔表自己的表頭重排每一列**。`ensureHeaders_` 是往右補欄位，所以兩張表的欄序不保證相同；直接照 `Events` 的順序寫入會造成欄位錯位。
 
-過期定義為活動開始時間加 `EVENT_GRACE_MS`（2 小時），前後端必須一致，活動進行中仍要看得到。
+一般活動開始 2 小時後標示為「已過期」並停止報名，但會繼續顯示 24 小時；之後才從網站隱藏並等待每日歸檔。前端使用 `EVENT_DURATION_MS`／`EXPIRED_EVENT_DISPLAY_MS`，GAS 使用 `APP_CONFIG.EVENT_DURATION_MS`／`EXPIRED_EVENT_RETENTION_MS`，兩端數值必須一致。
 
 「已過期」分頁與匯出歷史紀錄功能已刻意移除，不要重新加回。歸檔資料只在 Sheet 內查看。
 
