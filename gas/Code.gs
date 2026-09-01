@@ -434,7 +434,7 @@ function setupProject() {
 function showSchemaInfo() {
   const message = [
     "Events：保存活動目前狀態，status 為 active 或 deleted。",
-    "固定團：isFixedGroup 為 TRUE，固定時間保存在 fixedTimeText。",
+    "固定團：isFixedGroup 為 TRUE，選填的固定時間保存在 fixedTimeText。",
     "固定團與一般活動共用同一份 attendees 名單，沒有分固定／本週參與。",
     "許願活動：isWish 為 TRUE，建立滿 3 天午夜結算，人數未超過 3 人整列刪除且不歸檔。",
     "加強推廣：isHighlighted 為 TRUE，全站同時最多 3 個仍在顯示中的活動。",
@@ -679,13 +679,6 @@ function saveEvent_(eventsSheet, auditSheet, payload) {
     normalizedEvent.weeklyAttendees = [];
     const creatingHost = normalizeUser_(normalizedEvent.hostUser);
     normalizedEvent.attendees = normalizeUsers_([creatingHost].concat(normalizedEvent.attendees || []));
-    if (normalizedEvent.isFixedGroup && !normalizedEvent.fixedTimeText) {
-      throw new Error("固定團必須填寫固定時間。");
-    }
-  }
-
-  if (normalizedEvent.isFixedGroup && !normalizedEvent.fixedTimeText) {
-    throw new Error("固定團必須填寫固定時間。");
   }
 
   normalizedEvent.id = eventId;

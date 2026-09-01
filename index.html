@@ -1431,7 +1431,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-08-17T22:53:17+08:00">v260817.2253</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-09-01T14:53:11+08:00">v260901.1453</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1597,8 +1597,8 @@
             </div>
             <div id="input-fixed-time-wrap" class="fixed-time-field">
               <label class="datetime-picker-field" for="input-fixed-time">
-                <span class="datetime-picker-label">固定團時間</span>
-                <input type="text" id="input-fixed-time" class="line-input" placeholder="例如：每週三 19:30～21:30">
+                <span class="datetime-picker-label">固定團時間（選填）</span>
+                <input type="text" id="input-fixed-time" class="line-input" placeholder="例如：每週三 19:30～21:30；沒有固定時間可留空">
               </label>
             </div>
           </div>
@@ -1664,8 +1664,8 @@
             </div>
             <div id="edit-fixed-time-wrap" class="fixed-time-field">
               <label class="datetime-picker-field" for="edit-fixed-time">
-                <span class="datetime-picker-label">固定團時間</span>
-                <input type="text" id="edit-fixed-time" class="line-input" placeholder="例如：每週三 19:30～21:30">
+                <span class="datetime-picker-label">固定團時間（選填）</span>
+                <input type="text" id="edit-fixed-time" class="line-input" placeholder="例如：每週三 19:30～21:30；沒有固定時間可留空">
               </label>
             </div>
           </div>
@@ -1850,7 +1850,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260817.2253", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260901.1453", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2086,7 +2086,7 @@
 
     function getEventTimeText(evt) {
       return isFixedGroup(evt)
-        ? String(evt.fixedTimeText || "時間由主揪另行通知")
+        ? String(evt.fixedTimeText || "^_^//")
         : formatDateTime(evt.datetime);
     }
 
@@ -2523,7 +2523,7 @@
       ["input-date", "input-hour", "input-minute"].forEach(id => {
         document.getElementById(id).required = !enabled;
       });
-      fixedTimeInput.required = Boolean(enabled);
+      fixedTimeInput.required = false;
     }
 
     function setEditTimeMode(evt) {
@@ -2536,7 +2536,7 @@
       ["edit-date", "edit-hour", "edit-minute"].forEach(id => {
         document.getElementById(id).required = !fixed;
       });
-      fixedTimeInput.required = fixed;
+      fixedTimeInput.required = false;
       fixedTimeInput.value = fixed ? String(evt.fixedTimeText || "") : "";
       if (!fixed) setDateTimePickerValue("edit", evt.datetime);
     }
@@ -3189,7 +3189,7 @@
     function getEventShortTimeText(evt) {
       if (!evt) return "";
       if (isFixedGroup(evt)) {
-        return evt.fixedTimeText || "固定團";
+        return evt.fixedTimeText || "^_^//";
       }
       const dt = parseSafeDate(evt.datetime);
       if (!dt || isNaN(dt.getTime())) return "日期待定";
@@ -3719,10 +3719,6 @@ ${pageUrl}`;
         return;
       }
       const fixedTimeText = document.getElementById("input-fixed-time").value.trim();
-      if (fixedGroup && !fixedTimeText) {
-        alert("請填寫固定團時間。");
-        return;
-      }
 
       // 固定團沒有明確日期，無法做三天結算，因此兩者互斥。
       const wishEvent = !fixedGroup && document.getElementById("input-is-wish").checked;
@@ -3990,10 +3986,6 @@ ${pageUrl}`;
       const newFixedTimeText = fixedGroup
         ? document.getElementById("edit-fixed-time").value.trim()
         : "";
-      if (fixedGroup && !newFixedTimeText) {
-        alert("請填寫固定團時間。");
-        return;
-      }
       const newLocation = normalizeLocation(document.getElementById("edit-location").value);
       const newFee = document.getElementById("edit-fee").value.trim() || "免費";
       const newMax = parseInt(document.getElementById("edit-max").value, 10) || 0;
@@ -4021,7 +4013,9 @@ ${pageUrl}`;
       if (evt.title !== newTitle) contentChanges.push(`名稱改為「${newTitle}」`);
       if (!fixedGroup && evt.datetime !== newDatetime) contentChanges.push(`時間改為「${formatDateTime(newDatetime)}」`);
       if (fixedGroup && String(evt.fixedTimeText || "") !== newFixedTimeText) {
-        contentChanges.push(`固定時間改為「${newFixedTimeText}」`);
+        contentChanges.push(newFixedTimeText
+          ? `固定時間改為「${newFixedTimeText}」`
+          : "清除固定時間");
       }
       if (evt.location !== newLocation) contentChanges.push(`地點改為「${newLocation}」`);
       if (evt.fee !== newFee) contentChanges.push(`費用改為「${newFee}」`);

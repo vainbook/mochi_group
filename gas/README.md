@@ -70,7 +70,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `isFixedGroup` | 是否為固定團，`TRUE` 代表固定團 |
 | `isWish` | 是否為許願活動，`TRUE` 代表許願 |
 | `isHighlighted` | 是否正在加強推廣，`TRUE` 代表套用粉紅櫻花標題視覺；全站最多同時 3 筆 |
-| `fixedTimeText` | 固定團由主揪手寫的時間文字 |
+| `fixedTimeText` | 固定團由主揪選填的時間文字 |
 | `location` | 地點 |
 | `hostName` | 目前主揪顯示名稱 |
 | `hostUser` | 目前主揪的 JSON 資料 |
@@ -137,7 +137,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 - 日曆只同步活動名稱、時間與地點，**不寫入活動說明、費用、LINE 帳號或參與名單**。
 - 一般活動預設行程長度為 2 小時。
 - 同步只在儲存與刪除活動時觸發，報名／退出不會碰日曆。
-- 固定團時間是手寫文字，沒有明確日期，因此不自動建立日曆行程。
+- 固定團時間是選填的手寫文字；空白時網頁顯示 `^_^//`。固定團沒有明確日期，因此不自動建立日曆行程。
 - 無效時間不建立行程。已過期活動保留日曆歷史，後續編輯或刪除不再修改它。
 - 刪除尚未過期的網頁活動時，同步刪除對應 Google 行程。
 - Apps Script 專案時區應設為 `Asia/Taipei`，且部署必須以日曆擁有者或具有編輯權限的帳號執行。
@@ -180,7 +180,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 2. 報名或退出時，同一列的 `attendees` 與 `history` 更新。
 3. `AuditLog` 每次操作都增加一列。
 4. 刪除後原列仍在 `Events` 且 `status = deleted`，`/exec` 回傳已不含該活動；執行「立即歸檔過期活動」後該列移到 `EventsArchive`。
-5. 建立固定團後，確認 `isFixedGroup = TRUE`、`fixedTimeText` 有內容，主揪出現在 `attendees`。
+5. 建立固定團後，確認 `isFixedGroup = TRUE`；`fixedTimeText` 可留空，主揪出現在 `attendees`。
 6. 固定團按「本週參與／本週取消」，確認 `attendees` 正確增減，且 `fixedAttendees`／`weeklyAttendees` 維持空陣列。
 7. 建立一般未過期活動，確認 `calendarEventId` 有值，Google 日曆中出現同名行程，且行程的說明欄是**空的**（不得包含成員名單）。
 8. 修改名稱、時間與地點，確認更新原行程而不是新增重複行程。
