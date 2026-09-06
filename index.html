@@ -709,6 +709,195 @@
       background: #f1f5f9;
     }
 
+    .fab-checkin {
+      background: #2563eb;
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+    }
+
+    .fab-checkin:hover {
+      background: #1d4ed8;
+    }
+
+    .fab-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* 打卡紀錄 */
+    .checkin-self {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--line-border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .checkin-self img {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #e2e8f0;
+    }
+
+    .checkin-self-text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .checkin-self-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .checkin-self-status {
+      font-size: 12px;
+      color: var(--line-text-sub);
+      margin-top: 2px;
+    }
+
+    #btn-submit-checkin {
+      flex-shrink: 0;
+      min-width: 96px;
+      justify-content: center;
+    }
+
+    #btn-submit-checkin:disabled {
+      background: #e2e8f0;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .checkin-summary {
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 10px;
+    }
+
+    .checkin-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .checkin-tools .line-input {
+      height: 44px;
+    }
+
+    .checkin-filters {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .checkin-sort {
+      width: auto;
+      flex-shrink: 0;
+      height: 44px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+
+    .checkin-list {
+      border: 1px solid var(--line-border);
+      border-radius: 10px;
+      background: #ffffff;
+      max-height: 46vh;
+      overflow-y: auto;
+    }
+
+    .checkin-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .checkin-row:last-child {
+      border-bottom: none;
+    }
+
+    .checkin-row.is-self {
+      background: var(--line-green-light);
+    }
+
+    .checkin-row img {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #e2e8f0;
+    }
+
+    .checkin-row-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      color: #0f172a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .checkin-badge {
+      flex-shrink: 0;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .checkin-badge.done {
+      background: var(--line-green-light);
+      color: var(--line-green-dark);
+    }
+
+    .checkin-badge.pending {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+
+    .checkin-row-action {
+      flex-shrink: 0;
+      min-height: 32px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    .checkin-empty {
+      padding: 24px 12px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--line-text-sub);
+    }
+
+    .checkin-admin-zone {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed #cbd5e1;
+    }
+
+    .checkin-admin-zone .form-help {
+      margin-bottom: 8px;
+    }
+
     /* 活動日曆檢視 */
     .calendar-hint {
       font-size: 12px;
@@ -1431,7 +1620,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-09-01T14:53:11+08:00">v260901.1453</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-09-06T15:41:38+08:00">v260906.1541</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1469,6 +1658,9 @@
 
   <!-- Floating Action Buttons Group (日曆 & 宣傳 & 揪團) -->
   <div class="fab-group">
+    <button id="btn-open-checkin" class="fab-btn fab-checkin" type="button">
+      <span>打卡</span>
+    </button>
     <button id="btn-open-calendar" class="fab-btn fab-calendar" type="button">
       <span>日曆</span>
     </button>
@@ -1478,6 +1670,50 @@
     <button id="fab-add-event" class="fab-btn fab-add">
       <span>揪團</span>
     </button>
+  </div>
+
+  <!-- Modal: Check-in (打卡紀錄) -->
+  <div id="modal-checkin" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="title-checkin">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="title-checkin" class="modal-title-text">打卡紀錄</span>
+        <button class="modal-close" data-close="modal-checkin" aria-label="關閉打卡紀錄視窗">關閉</button>
+      </div>
+      <div class="modal-form-body">
+        <div class="checkin-self">
+          <img id="checkin-self-avatar" alt="" src="">
+          <div class="checkin-self-text">
+            <div id="checkin-self-name" class="checkin-self-name">未登入成員</div>
+            <div id="checkin-self-status" class="checkin-self-status">尚未打卡</div>
+          </div>
+          <button id="btn-submit-checkin" class="line-btn btn-join" type="button">打卡</button>
+        </div>
+
+        <div id="checkin-summary" class="checkin-summary">名單載入中</div>
+
+        <div class="checkin-tools">
+          <input id="checkin-search" class="line-input" type="search" placeholder="搜尋名字" aria-label="搜尋成員名字" autocomplete="off">
+          <div class="checkin-filters">
+            <button type="button" class="tab-btn active" data-checkin-filter="all" aria-pressed="true">全部</button>
+            <button type="button" class="tab-btn" data-checkin-filter="done" aria-pressed="false">已打卡</button>
+            <button type="button" class="tab-btn" data-checkin-filter="pending" aria-pressed="false">未打卡</button>
+          </div>
+          <select id="checkin-sort" class="line-input checkin-sort" aria-label="名單排序方式">
+            <option value="name-asc">名稱 A→Z</option>
+            <option value="name-desc">名稱 Z→A</option>
+            <option value="pending-first">未打卡優先</option>
+            <option value="done-first">已打卡優先</option>
+          </select>
+        </div>
+
+        <div id="checkin-list" class="checkin-list"></div>
+
+        <div id="checkin-admin-zone" class="checkin-admin-zone" style="display:none;">
+          <p class="form-help">重置後所有人都會變回未打卡，需要重新打卡一次。名單本身不會被刪除。</p>
+          <button id="btn-reset-checkins" class="line-btn btn-delete" type="button" style="width:100%;">重置全部人打卡</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Modal: Calendar View (活動日曆) -->
@@ -1850,7 +2086,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260901.1453", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260906.1541", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -1890,6 +2126,17 @@
     let isDevMode = false;
     let isLiffReady = false;
     let eventsData = [];
+
+    // 打卡名單。刻意不進 localStorage：名單不是離線必需品，
+    // 每次同步都會整份覆蓋，多一份本機快取只會多一組要維護的合併邏輯。
+    let membersData = [];
+    // 後端有沒有 Members 表。用 doGet 是否回傳 members 判斷，比 schemaVersion 準
+    // （schemaVersion 只檢查 Events 的欄位，看不出 Members 表建了沒）。
+    let membersSupported = false;
+    let checkinFilter = "all";
+    let checkinQuery = "";
+    let checkinSort = "name-asc";
+    let checkinRequestInFlight = false;
 
     // 三個分類各自可獨立開關，預設全開。
     const activeFilters = new Set(["open", "fixed", "wish"]);
@@ -2261,6 +2508,7 @@
       setupInputFocusScroll();
       setupQuarterHourInputs();
       updateFixedGroupAvailability();
+      updateCheckinAvailability();
 
       initLIFF().finally(() => setupAutomaticUpdates());
       runInitialSync();
@@ -2649,6 +2897,8 @@
         versionBadge.classList.toggle("admin-active", currentUserCanDeleteAnyEvent);
         versionBadge.title = currentUserCanDeleteAnyEvent ? "點擊退出管理員模式" : "";
       }
+      // 進出管理員模式或重新登入時，開著的打卡視窗要立刻換掉管理員按鈕。
+      if (isCheckinModalOpen()) renderCheckinList();
     }
 
     async function verifyAdminPassword(password) {
@@ -2807,7 +3057,10 @@
         if (data && data.status === "success" && data.events && Array.isArray(data.events)) {
           serverSchemaVersion = String(data.schemaVersion || "1");
           serverCalendarInfo = (data.calendar && data.calendar.configured) ? data.calendar : null;
+          // 舊版 GAS 不會回傳 members，用它當能力旗標；此時不可把本機名單清空。
+          membersSupported = Array.isArray(data.members);
           updateFixedGroupAvailability();
+          updateCheckinAvailability();
           const uniqueEventMap = new Map();
           data.events.forEach(remoteEvt => {
             if (!remoteEvt || !remoteEvt.id) return;
@@ -2858,6 +3111,12 @@
           // 使用者在雲端請求期間剛完成操作時，不讓較早的回應覆蓋新畫面。
           if (revisionAtStart !== localMutationRevision) return true;
 
+          // 與 eventsData 同一段：晚於 revision 檢查，避免舊回應蓋掉剛送出的打卡。
+          if (Array.isArray(data.members)) {
+            membersData = data.members;
+            if (isCheckinModalOpen()) renderCheckinList();
+          }
+
           eventsData = cleanEvents.map(remoteEvt => {
             const localEvt = eventsData.find(l => l.id === remoteEvt.id);
             if (localEvt) {
@@ -2888,6 +3147,11 @@
     // 不可讓使用者以為雲端已完成，之後又被背景同步默默蓋回舊資料。
     function snapshotEventState(evt) {
       return evt ? JSON.parse(JSON.stringify(evt)) : null;
+    }
+
+    function isCheckinModalOpen() {
+      const modal = document.getElementById("modal-checkin");
+      return Boolean(modal) && modal.getAttribute("aria-hidden") === "false";
     }
 
     function isDetailModalOpen() {
@@ -3393,6 +3657,330 @@
           link.textContent = resolved.displayName;
         });
       }
+    }
+
+    // --- 打卡紀錄 ---------------------------------------------------------
+    // 名單資料只有一種狀態：checkedInAt 非空字串 = 本輪已打卡。
+    // 不保留歷史、不會換月自動重置，清空只由管理員按重置全部執行。
+
+    function isMemberCheckedIn(member) {
+      return Boolean(member && String(member.checkedInAt || "").trim());
+    }
+
+    function getMyMemberRecord() {
+      const myUserId = String(currentUser?.userId || "");
+      if (!myUserId) return null;
+      return membersData.find(item => String(item.userId || "") === myUserId) || null;
+    }
+
+    function formatCheckinTime(isoText) {
+      const time = new Date(String(isoText || ""));
+      if (Number.isNaN(time.getTime())) return "";
+      const month = time.getMonth() + 1;
+      const day = time.getDate();
+      const hour = String(time.getHours()).padStart(2, "0");
+      const minute = String(time.getMinutes()).padStart(2, "0");
+      return `${month}/${day} ${hour}:${minute}`;
+    }
+
+    // FAB 只在後端就緒時可用。舊部署還沒建 Members 表就先擋住，
+    // 否則使用者按下去只會拿到「缺少 Members 工作表」的錯誤。
+    function updateCheckinAvailability() {
+      const fab = document.getElementById("btn-open-checkin");
+      if (!fab) return;
+      const ready = membersSupported || isDevMode;
+      fab.disabled = !ready;
+      fab.title = ready ? "" : "雲端尚未完成打卡功能初始化";
+      const label = fab.querySelector("span");
+      if (label) label.innerText = ready ? "打卡" : "打卡（需更新）";
+    }
+
+    function renderCheckinSelf() {
+      const avatarEl = document.getElementById("checkin-self-avatar");
+      const nameEl = document.getElementById("checkin-self-name");
+      const statusEl = document.getElementById("checkin-self-status");
+      const buttonEl = document.getElementById("btn-submit-checkin");
+      if (!avatarEl || !nameEl || !statusEl || !buttonEl) return;
+
+      const displayName = currentUser?.displayName || "未登入成員";
+      avatarEl.src = getSafeImageUrl(currentUser?.pictureUrl, displayName);
+      avatarEl.alt = `${displayName}的頭像`;
+      nameEl.innerText = displayName;
+
+      if (!currentUser) {
+        statusEl.innerText = "請先登入 LINE 才能打卡";
+        buttonEl.innerText = "打卡";
+        buttonEl.disabled = false;
+        return;
+      }
+
+      const myRecord = getMyMemberRecord();
+      const checkedIn = isMemberCheckedIn(myRecord);
+      if (checkinRequestInFlight) {
+        statusEl.innerText = "正在送出打卡...";
+        buttonEl.innerText = "處理中";
+        buttonEl.disabled = true;
+        return;
+      }
+
+      if (checkedIn) {
+        const timeText = formatCheckinTime(myRecord.checkedInAt);
+        statusEl.innerText = timeText ? `已打卡 ${timeText}` : "已打卡";
+        buttonEl.innerText = "已完成打卡";
+        buttonEl.disabled = true;
+      } else {
+        statusEl.innerText = myRecord ? "本輪尚未打卡" : "尚未加入名單，打卡後自動加入";
+        buttonEl.innerText = "打卡";
+        buttonEl.disabled = false;
+      }
+    }
+
+    function getVisibleMembers() {
+      const query = checkinQuery.trim().toLowerCase();
+      const filtered = membersData.filter(member => {
+        if (!member || !member.userId) return false;
+        if (query && !String(member.displayName || "").toLowerCase().includes(query)) return false;
+        if (checkinFilter === "done") return isMemberCheckedIn(member);
+        if (checkinFilter === "pending") return !isMemberCheckedIn(member);
+        return true;
+      });
+
+      const byName = (a, b) => String(a.displayName || "")
+        .localeCompare(String(b.displayName || ""), "zh-Hant");
+
+      return filtered.sort((a, b) => {
+        if (checkinSort === "name-desc") return byName(b, a);
+        if (checkinSort === "pending-first" || checkinSort === "done-first") {
+          const aDone = isMemberCheckedIn(a) ? 1 : 0;
+          const bDone = isMemberCheckedIn(b) ? 1 : 0;
+          if (aDone !== bDone) return checkinSort === "pending-first" ? aDone - bDone : bDone - aDone;
+        }
+        return byName(a, b);
+      });
+    }
+
+    function renderCheckinList() {
+      renderCheckinSelf();
+
+      const summaryEl = document.getElementById("checkin-summary");
+      const listEl = document.getElementById("checkin-list");
+      const adminZoneEl = document.getElementById("checkin-admin-zone");
+      if (!summaryEl || !listEl) return;
+
+      if (adminZoneEl) {
+        adminZoneEl.style.display = currentUserCanDeleteAnyEvent ? "block" : "none";
+      }
+
+      const total = membersData.length;
+      const doneCount = membersData.filter(isMemberCheckedIn).length;
+      summaryEl.innerText = total === 0
+        ? (membersSupported ? "名單還是空的，第一個打卡的人會自動加入" : "雲端尚未取得名單")
+        : `已打卡 ${doneCount} / 共 ${total} 人`;
+
+      const visible = getVisibleMembers();
+      listEl.replaceChildren();
+
+      if (visible.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "checkin-empty";
+        empty.innerText = total === 0 ? "還沒有人打卡" : "找不到符合條件的成員";
+        listEl.append(empty);
+        return;
+      }
+
+      const myUserId = String(currentUser?.userId || "");
+      visible.forEach(member => {
+        const displayName = String(member.displayName || "未命名成員");
+        const checkedIn = isMemberCheckedIn(member);
+
+        const row = document.createElement("div");
+        row.className = "checkin-row" + (myUserId && String(member.userId) === myUserId ? " is-self" : "");
+
+        const avatar = document.createElement("img");
+        avatar.src = getSafeImageUrl(member.pictureUrl, displayName);
+        avatar.alt = `${displayName}的頭像`;
+        avatar.loading = "lazy";
+
+        const name = document.createElement("span");
+        name.className = "checkin-row-name";
+        name.textContent = displayName;
+
+        const badge = document.createElement("span");
+        badge.className = "checkin-badge " + (checkedIn ? "done" : "pending");
+        badge.textContent = checkedIn ? "已打卡" : "未打卡";
+        if (checkedIn) {
+          const timeText = formatCheckinTime(member.checkedInAt);
+          if (timeText) badge.title = `打卡時間 ${timeText}`;
+        }
+
+        row.append(avatar, name, badge);
+
+        // 管理員按鈕只是介面便利，真正的權限在 GAS 的 assertAdminPermission_。
+        if (currentUserCanDeleteAnyEvent) {
+          if (checkedIn) {
+            const uncheckBtn = document.createElement("button");
+            uncheckBtn.type = "button";
+            uncheckBtn.className = "line-btn btn-detail checkin-row-action";
+            uncheckBtn.innerText = "取消打卡";
+            uncheckBtn.onclick = () => adminUncheckMember(member.userId, displayName);
+            row.append(uncheckBtn);
+          }
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "line-btn btn-delete checkin-row-action";
+          removeBtn.innerText = "移除";
+          removeBtn.onclick = () => adminRemoveMember(member.userId, displayName);
+          row.append(removeBtn);
+        }
+
+        listEl.append(row);
+      });
+    }
+
+    function openCheckinModal() {
+      if (!membersSupported && !isDevMode) {
+        alert("雲端尚未完成打卡功能初始化，請管理員在 Google Sheet 執行一次「初始化／修復表格」。");
+        return;
+      }
+      checkinQuery = "";
+      const searchEl = document.getElementById("checkin-search");
+      if (searchEl) searchEl.value = "";
+      renderCheckinList();
+      openModal("modal-checkin");
+      // 開啟時順手抓一次最新名單，但不擋畫面。
+      runBackgroundSync();
+    }
+
+    // 打卡刻意不做樂觀更新：rollbackEventState 綁死 eventsData，
+    // 要給名單用就得複製整套快照與回滾。打卡是低頻單次操作，
+    // 等伺服器確認後再改本機資料，就完全不需要回滾程式碼。
+    async function submitCheckIn() {
+      if (checkinRequestInFlight) return;
+      if (!ensureLoggedIn()) return;
+
+      checkinRequestInFlight = true;
+      renderCheckinSelf();
+
+      try {
+        const result = await sendPostToGAS({
+          action: "checkIn",
+          pictureUrl: currentUser?.pictureUrl || ""
+        });
+
+        if (!result.ok) {
+          alert(`打卡失敗。\n\n${result.message}`);
+          return;
+        }
+        if (result.pending) {
+          showToast(result.persisted ? "打卡已保留，雲端會自動確認" : "打卡結果待確認，請稍後重新整理");
+          return;
+        }
+
+        // sendPostToGAS 不回傳 response body，所以本機自己補上這一筆。
+        applyLocalCheckIn();
+        showToast("打卡完成");
+      } finally {
+        checkinRequestInFlight = false;
+        renderCheckinList();
+      }
+    }
+
+    function applyLocalCheckIn() {
+      const myUserId = String(currentUser?.userId || "");
+      if (!myUserId) return;
+      const now = new Date().toISOString();
+      const existing = getMyMemberRecord();
+      if (existing) {
+        existing.checkedInAt = now;
+        existing.displayName = currentUser.displayName || existing.displayName;
+        existing.pictureUrl = currentUser.pictureUrl || existing.pictureUrl;
+      } else {
+        membersData.push({
+          userId: myUserId,
+          displayName: currentUser.displayName || "未命名成員",
+          pictureUrl: currentUser.pictureUrl || "",
+          joinedAt: now,
+          checkedInAt: now
+        });
+      }
+    }
+
+    function buildAdminCheckinPayload(extra) {
+      return Object.assign({}, extra, currentUserCanDeleteAnyEvent
+        ? { adminPassword: currentAdminPassword }
+        : {});
+    }
+
+    async function adminUncheckMember(targetUserId, displayName) {
+      if (!currentUserCanDeleteAnyEvent) return;
+      if (!confirm(`確定要取消「${displayName}」的打卡嗎？他會變回未打卡狀態。`)) return;
+
+      const result = await sendPostToGAS(buildAdminCheckinPayload({
+        action: "adminUncheckMember",
+        targetUserId: targetUserId
+      }));
+
+      if (!result.ok) {
+        alert(`取消打卡失敗。\n\n${result.message}`);
+        return;
+      }
+      if (result.pending) {
+        showToast("結果待確認，請稍後重新整理");
+        return;
+      }
+
+      const target = membersData.find(item => String(item.userId) === String(targetUserId));
+      if (target) target.checkedInAt = "";
+      renderCheckinList();
+      showToast("已取消打卡");
+    }
+
+    async function adminRemoveMember(targetUserId, displayName) {
+      if (!currentUserCanDeleteAnyEvent) return;
+      if (!confirm(`確定要將「${displayName}」從打卡名單移除嗎？\n\n此操作不可復原，他要重新打卡才會再出現。`)) return;
+
+      const result = await sendPostToGAS(buildAdminCheckinPayload({
+        action: "adminRemoveMember",
+        targetUserId: targetUserId
+      }));
+
+      if (!result.ok) {
+        alert(`移除成員失敗。\n\n${result.message}`);
+        return;
+      }
+      if (result.pending) {
+        showToast("結果待確認，請稍後重新整理");
+        return;
+      }
+
+      membersData = membersData.filter(item => String(item.userId) !== String(targetUserId));
+      renderCheckinList();
+      showToast("已移出名單");
+    }
+
+    async function adminResetCheckIns() {
+      if (!currentUserCanDeleteAnyEvent) return;
+      const total = membersData.length;
+      if (total === 0) {
+        alert("名單目前沒有成員。");
+        return;
+      }
+      if (!confirm(`確定要重置全部 ${total} 人的打卡嗎？\n\n所有人都會變回未打卡，需要重新打卡一次。此操作不可復原。`)) return;
+
+      const result = await sendPostToGAS(buildAdminCheckinPayload({ action: "adminResetCheckIns" }));
+
+      if (!result.ok) {
+        alert(`重置失敗。\n\n${result.message}`);
+        return;
+      }
+      if (result.pending) {
+        showToast("結果待確認，請稍後重新整理");
+        return;
+      }
+
+      membersData.forEach(item => { item.checkedInAt = ""; });
+      renderCheckinList();
+      showToast("已重置全部打卡");
     }
 
     function getSafeImageUrl(pictureUrl, displayName) {
@@ -4447,6 +5035,33 @@ ${getShareableUrl()}`;
 
       document.getElementById("btn-open-calendar").onclick = openCalendarModal;
 
+      document.getElementById("btn-open-checkin").onclick = openCheckinModal;
+      document.getElementById("btn-submit-checkin").onclick = submitCheckIn;
+      document.getElementById("btn-reset-checkins").onclick = adminResetCheckIns;
+
+      document.getElementById("checkin-search").addEventListener("input", (e) => {
+        checkinQuery = e.target.value || "";
+        renderCheckinList();
+      });
+
+      document.getElementById("checkin-sort").addEventListener("change", (e) => {
+        checkinSort = e.target.value || "name-asc";
+        renderCheckinList();
+      });
+
+      // 打卡的三顆篩選是單選互斥，跟主畫面那組多選開關不同，所以分開綁。
+      document.querySelectorAll("[data-checkin-filter]").forEach(btn => {
+        btn.onclick = () => {
+          checkinFilter = btn.getAttribute("data-checkin-filter") || "all";
+          document.querySelectorAll("[data-checkin-filter]").forEach(other => {
+            const isActive = other === btn;
+            other.classList.toggle("active", isActive);
+            other.setAttribute("aria-pressed", String(isActive));
+          });
+          renderCheckinList();
+        };
+      });
+
       document.getElementById("form-comment").addEventListener("submit", (e) => {
         e.preventDefault();
         submitComment();
@@ -4494,7 +5109,9 @@ ${getShareableUrl()}`;
         btn.onclick = () => closeModal(btn.getAttribute("data-close"));
       });
 
-      document.querySelectorAll(".tab-btn").forEach(btn => {
+      // 限定在主畫面的篩選列。打卡視窗裡也用 .tab-btn 樣式，
+      // 沒有這個 .nav-filters 前綴會把 modal 那三顆也綁上活動篩選邏輯。
+      document.querySelectorAll(".nav-filters .tab-btn").forEach(btn => {
         btn.onclick = () => {
           const key = btn.getAttribute("data-filter");
           const nowActive = !activeFilters.has(key);

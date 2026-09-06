@@ -99,9 +99,36 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `timestamp` | 伺服器紀錄時間 |
 | `actorUserId` | 操作者 LINE userId |
 | `actorName` | 操作者名稱 |
-| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`highlight`、`unhighlight`、`admin_remove_attendee` |
+| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`highlight`、`unhighlight`、`admin_remove_attendee`、`checkin`、`admin_uncheck`、`admin_remove_member`、`admin_reset_checkins` |
 | `action` | 可閱讀的操作說明 |
 | `details` | 補充 JSON 資料 |
+
+## Members 表格設計（打卡名單）
+
+| 欄位 | 用途 |
+|---|---|
+| `userId` | LINE userId，名單的唯一鍵 |
+| `displayName` | 顯示名稱，每次打卡時更新（LINE 名稱可改），寫入前截斷到 40 字 |
+| `pictureUrl` | 頭像網址 |
+| `joinedAt` | 首次打卡時間，即成為名單成員的時間，之後不再變動 |
+| `checkedInAt` | 本輪打卡時間。**空字串代表未打卡**，這就是全部的狀態 |
+
+刻意沒有月份欄與歷史陣列：打卡不保留歷史，也不會換月自動重置。清空只由管理員在網頁上按「重置全部人打卡」執行（一次 `clearContent()` 清整欄）。
+
+四個對應的 action：
+
+| action | 權限 | 行為 |
+|---|---|---|
+| `checkIn` | 任何已登入成員 | 名單裡沒有就新增一列（同時寫 `joinedAt` 與 `checkedInAt`），已有就只更新 `checkedInAt` 與顯示名稱 |
+| `adminUncheckMember` | 僅管理員 | 清空該成員的 `checkedInAt`，人留在名單上 |
+| `adminRemoveMember` | 僅管理員 | 整列硬刪除 |
+| `adminResetCheckIns` | 僅管理員 | 一次清空整欄 `checkedInAt` |
+
+三個管理動作走 `assertAdminPermission_(payload)`，是全檔唯一的純管理員驗證。
+
+**這是全站唯一由未驗證輸入新增列的路徑**，所以 `checkIn_` 內有兩道硬限制：名單上限 `APP_CONFIG.MAX_MEMBERS`（500，對齊 LINE 群組人數上限）、`displayName` 截斷 40 字。兩者都不可移除。另外 `checkIn_` 只認 `payload.actorUserId`，不接受 payload 自帶的目標 userId，否則任何人都能替別人打卡。
+
+`Members` 表不存在時（還沒跑過新版 `setupProject()`），`doGet` 會靜靜省略 `members` 欄位而不是報錯，前端據此把打卡按鈕鎖成「打卡（需更新）」。
 
 ## 同步與權限規則
 

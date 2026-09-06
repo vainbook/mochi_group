@@ -97,6 +97,11 @@ const APP_CONFIG = Object.freeze({
   CALENDAR_ID_PROPERTY: "GOOGLE_CALENDAR_ID",
   CALENDAR_NAME_PROPERTY: "GOOGLE_CALENDAR_NAME",
   LOCK_TIMEOUT_MS: 15000,
+  MEMBERS_SHEET: "Members",
+  // 打卡名單是唯一由未驗證輸入新增列的路徑，必須有硬上限。
+  // LINE 群組上限 500 人，超過就拒絕，避免有人拿 /exec 網址灌爆表格。
+  MAX_MEMBERS: 500,
+  MAX_MEMBER_NAME_LENGTH: 40,
   SCHEMA_VERSION: "5"
 });
 
@@ -146,6 +151,18 @@ const JSON_EVENT_FIELDS = Object.freeze([
   "fixedAttendees",
   "weeklyAttendees",
   "history"
+]);
+
+/**
+ * 打卡名單。checkedInAt 非空字串 = 本輪已打卡，這就是全部的狀態。
+ * 刻意沒有月份欄與歷史陣列：打卡不保留歷史，重置只由管理員手動執行。
+ */
+const MEMBER_HEADERS = Object.freeze([
+  "userId",
+  "displayName",
+  "pictureUrl",
+  "joinedAt",
+  "checkedInAt"
 ]);
 
 function onOpen() {
@@ -413,6 +430,7 @@ function setupProject() {
     formatEventsSheet_(eventsSheet);
     formatAuditSheet_(auditSheet);
     getOrCreateArchiveSheet_(spreadsheet, EVENT_HEADERS.slice());
+    getOrCreateMembersSheet_(spreadsheet);
     installArchiveTrigger_();
 
     PropertiesService.getScriptProperties().setProperties({
@@ -423,7 +441,7 @@ function setupProject() {
     refreshPublicPayloadCacheQuietly_(spreadsheet);
     return {
       status: "success",
-      message: "Events、EventsArchive 與 AuditLog 已完成初始化，表格結構版本為 " +
+      message: "Events、EventsArchive、AuditLog 與 Members 已完成初始化，表格結構版本為 " +
         APP_CONFIG.SCHEMA_VERSION + "。已建立每日自動歸檔與許願結算觸發器。"
     };
   } finally {
@@ -440,7 +458,10 @@ function showSchemaInfo() {
     "加強推廣：isHighlighted 為 TRUE，全站同時最多 3 個仍在顯示中的活動。",
     "Google 日曆：calendarEventId 保存對應行程 ID，日曆 ID 只保存在 Script Properties。",
     "AuditLog：永久保存建立、報名、退出、編輯、交棒與刪除紀錄。",
-    "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。"
+    "刪除活動不會移除列，只會寫入 deletedAt 與 deletedBy。",
+    "Members：打卡名單，checkedInAt 非空代表本輪已打卡，不保留歷史月份。",
+    "打卡名單上限 " + APP_CONFIG.MAX_MEMBERS + " 人；移除成員是整列硬刪除，紀錄留在 AuditLog。",
+    "打卡狀態不會自動重置，只有管理員在網頁上按重置全部才會清空。"
   ].join("\n");
   SpreadsheetApp.getUi().alert(message);
 }
@@ -519,6 +540,20 @@ function doPost(e) {
           throw new Error("加強推廣欄位尚未初始化，請先執行 setupProject()。");
         }
         result = toggleHighlight_(eventsSheet, auditSheet, payload);
+        break;
+      // 打卡相關 action 收 spreadsheet 而非 eventsSheet：Members 表在各自函式內部才取，
+      // 避免舊試算表（還沒建 Members）連帶讓所有活動操作失敗。
+      case "checkIn":
+        result = checkIn_(spreadsheet, auditSheet, payload);
+        break;
+      case "adminUncheckMember":
+        result = adminUncheckMember_(spreadsheet, auditSheet, payload);
+        break;
+      case "adminRemoveMember":
+        result = adminRemoveMember_(spreadsheet, auditSheet, payload);
+        break;
+      case "adminResetCheckIns":
+        result = adminResetCheckIns_(spreadsheet, auditSheet, payload);
         break;
       default:
         throw new Error("不支援的 action：" + String(payload.action || "空白"));
@@ -943,6 +978,134 @@ function adminRemoveAttendee_(eventsSheet, auditSheet, payload) {
 }
 
 
+/**
+ * 打卡。首次打卡自動成為名單成員，已在名單者只更新打卡時間與顯示名稱。
+ * 只認 payload.actorUserId（由前端 buildMutationPayload 自動帶入），
+ * 不接受 payload 自帶的目標 userId，否則任何人都能替別人打卡。
+ */
+function checkIn_(spreadsheet, auditSheet, payload) {
+  const membersSheet = getMembersSheetForRequest_(spreadsheet);
+  const actorUserId = requireText_(payload.actorUserId, "尚未取得 LINE 身分，請重新登入後再打卡。");
+  const displayName = String(payload.actorName || "未命名成員")
+    .trim()
+    .slice(0, APP_CONFIG.MAX_MEMBER_NAME_LENGTH) || "未命名成員";
+  const pictureUrl = String(payload.pictureUrl || "").trim().slice(0, 300);
+  const now = new Date().toISOString();
+
+  const found = findMemberRow_(membersSheet, actorUserId);
+  let member;
+  let isNewMember = false;
+
+  if (found) {
+    member = found.member;
+    member.displayName = displayName;
+    member.pictureUrl = pictureUrl || member.pictureUrl || "";
+    member.checkedInAt = now;
+    writeMemberRow_(membersSheet, found.rowNumber, member);
+  } else {
+    // 名單是唯一由公開端點新增列的路徑，必須擋住灌爆表格。
+    const currentCount = Math.max(membersSheet.getLastRow() - 1, 0);
+    if (currentCount >= APP_CONFIG.MAX_MEMBERS) {
+      throw new Error("打卡名單已達上限 " + APP_CONFIG.MAX_MEMBERS + " 人，請管理員先移除不再參與的成員。");
+    }
+    isNewMember = true;
+    member = {
+      userId: actorUserId,
+      displayName: displayName,
+      pictureUrl: pictureUrl,
+      joinedAt: now,
+      checkedInAt: now
+    };
+    writeMemberRow_(membersSheet, 0, member);
+  }
+
+  appendAudit_(auditSheet, payload, {
+    eventId: "",
+    actionType: "checkin",
+    action: isNewMember ? displayName + " 首次打卡並加入名單" : displayName + " 完成打卡",
+    details: { userId: actorUserId, isNewMember: isNewMember }
+  });
+
+  return { member: member, isNewMember: isNewMember };
+}
+
+/**
+ * 管理員取消某位成員的打卡。成員仍留在名單上，只清掉打卡時間。
+ */
+function adminUncheckMember_(spreadsheet, auditSheet, payload) {
+  assertAdminPermission_(payload);
+  const membersSheet = getMembersSheetForRequest_(spreadsheet);
+  const targetUserId = requireText_(payload.targetUserId, "缺少 targetUserId");
+
+  const found = findMemberRow_(membersSheet, targetUserId);
+  if (!found) throw new Error("名單中找不到這位成員，可能已被移除。");
+
+  const member = found.member;
+  member.checkedInAt = "";
+  writeMemberRow_(membersSheet, found.rowNumber, member);
+
+  appendAudit_(auditSheet, payload, {
+    eventId: "",
+    actionType: "admin_uncheck",
+    action: "取消 " + (member.displayName || targetUserId) + " 的打卡",
+    details: { userId: targetUserId }
+  });
+
+  return { member: member };
+}
+
+/**
+ * 管理員把成員整列從名單移除（硬刪除）。
+ * 名單沒有歸檔需求，軟刪除只會讓名單無限成長，違反「不得存在無限成長的資料」。
+ * 移除紀錄由 AuditLog 承接。整段在 doPost 的 Script Lock 內，單列刪除不會有列號漂移問題。
+ */
+function adminRemoveMember_(spreadsheet, auditSheet, payload) {
+  assertAdminPermission_(payload);
+  const membersSheet = getMembersSheetForRequest_(spreadsheet);
+  const targetUserId = requireText_(payload.targetUserId, "缺少 targetUserId");
+
+  const found = findMemberRow_(membersSheet, targetUserId);
+  if (!found) throw new Error("名單中找不到這位成員，可能已被移除。");
+
+  const removedName = found.member.displayName || targetUserId;
+  membersSheet.deleteRow(found.rowNumber);
+
+  appendAudit_(auditSheet, payload, {
+    eventId: "",
+    actionType: "admin_remove_member",
+    action: "將 " + removedName + " 移出打卡名單",
+    details: { userId: targetUserId }
+  });
+
+  return { removedUserId: targetUserId };
+}
+
+/**
+ * 管理員重置全部人的打卡狀態。成員留在名單上，只清空打卡時間欄。
+ * 用一次 clearContent 清整欄；逐列 setValue 在數百人時會撞執行時間上限。
+ */
+function adminResetCheckIns_(spreadsheet, auditSheet, payload) {
+  assertAdminPermission_(payload);
+  const membersSheet = getMembersSheetForRequest_(spreadsheet);
+  const map = getHeaderMap_(membersSheet);
+  if (!map.checkedInAt) throw new Error("打卡名單缺少 checkedInAt 欄位，請先執行 setupProject()。");
+
+  const lastRow = membersSheet.getLastRow();
+  const memberCount = Math.max(lastRow - 1, 0);
+  if (memberCount > 0) {
+    membersSheet.getRange(2, map.checkedInAt, memberCount, 1).clearContent();
+  }
+
+  appendAudit_(auditSheet, payload, {
+    eventId: "",
+    actionType: "admin_reset_checkins",
+    action: "重置全部打卡狀態，共 " + memberCount + " 人",
+    details: { memberCount: memberCount }
+  });
+
+  return { reset: memberCount };
+}
+
 function softDeleteEvent_(eventsSheet, auditSheet, payload) {
   const eventId = requireText_(payload.eventId || payload.id, "缺少 eventId");
   const found = requireEvent_(eventsSheet, eventId);
@@ -1364,6 +1527,17 @@ function assertHandoffPermission_(eventItem, payload) {
   assertHostPermission_(eventItem, actorUserId);
 }
 
+/**
+ * 只有管理員。與活動相關的 assert 不同，這支不看主揪也不看報名狀態，
+ * 用於打卡名單的管理操作（取消他人打卡、移除成員、重置全部）。
+ * 前端把按鈕藏起來不算權限，/exec 是公開端點，一定要在這裡擋。
+ */
+function assertAdminPermission_(payload) {
+  if (!verifyAdminPassword_(payload.adminPassword)) {
+    throw new Error("只有管理員可以執行此操作。");
+  }
+}
+
 function isAdminPasswordConfigured_() {
   const properties = PropertiesService.getScriptProperties();
   return Boolean(
@@ -1538,12 +1712,17 @@ function buildPublicPayloadText_(spreadsheet) {
   const events = readAllEvents_(eventsSheet)
     .filter(eventItem => !isRetiredEvent_(eventItem));
 
+  // 名單另外用 getSheetByName：Members 表不存在時要靜靜省略這個欄位，
+  // 不可用 getRequiredSheetFromSpreadsheet_，否則舊試算表整個 doGet 會壞掉。
+  const membersSheet = spreadsheet.getSheetByName(APP_CONFIG.MEMBERS_SHEET);
+
   return JSON.stringify({
     status: "success",
     schemaVersion: schemaReady ? APP_CONFIG.SCHEMA_VERSION : "1",
     serverTime: new Date().toISOString(),
     calendar: getCalendarPublicInfo_(),
-    events: events
+    events: events,
+    members: membersSheet ? readAllMembers_(membersSheet) : undefined
   });
 }
 
@@ -1879,6 +2058,86 @@ function getOrCreateArchiveSheet_(spreadsheet, headers) {
   ensureHeaders_(sheet, headers);
   formatHeader_(sheet, headers.length, "#94a3b8");
   return sheet;
+}
+
+/**
+ * 打卡名單工作表。與歸檔表同樣每次呼叫都重跑 ensureHeaders_，
+ * 讓之後新增欄位時舊表能自動補齊。
+ */
+/**
+ * 請求路徑專用：表已存在就直接回傳，不重跑表頭與格式化。
+ * getOrCreateMembersSheet_ 每次會多五次寫入 API，掛在每一次打卡上是浪費；
+ * 補表頭與格式化交給 setupProject()（改 schema 後本來就要重跑）。
+ */
+function getMembersSheetForRequest_(spreadsheet) {
+  return spreadsheet.getSheetByName(APP_CONFIG.MEMBERS_SHEET) ||
+    getOrCreateMembersSheet_(spreadsheet);
+}
+
+function getOrCreateMembersSheet_(spreadsheet) {
+  let sheet = spreadsheet.getSheetByName(APP_CONFIG.MEMBERS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(APP_CONFIG.MEMBERS_SHEET);
+  }
+  ensureHeaders_(sheet, MEMBER_HEADERS);
+  formatHeader_(sheet, MEMBER_HEADERS.length, "#0ea5e9");
+  return sheet;
+}
+
+/**
+ * 讀取打卡名單。欄位全是純字串，不需要 rowToEvent_ 那套 JSON 與布林轉換。
+ */
+function readAllMembersWithRows_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  return rows
+    .map((row, index) => ({ rowNumber: index + 2, member: rowToMember_(headers, row) }))
+    .filter(item => item.member.userId);
+}
+
+function readAllMembers_(sheet) {
+  return readAllMembersWithRows_(sheet).map(item => item.member);
+}
+
+function rowToMember_(headers, row) {
+  const member = {};
+  headers.forEach((header, index) => {
+    if (!header) return;
+    let value = row[index];
+    if (value === undefined || value === null) value = "";
+    // Sheet 可能把 ISO 時間字串自動轉成日期物件，統一輸出成字串。
+    if (Object.prototype.toString.call(value) === "[object Date]") value = value.toISOString();
+    value = String(value);
+    // 剝掉寫入時為了防公式注入加上的前綴。
+    if (/^'[=+\-@]/.test(value)) value = value.slice(1);
+    member[header] = value;
+  });
+  return member;
+}
+
+/**
+ * 寫入一列名單。writeEvent_ 是通用的（讀該表自己的表頭 + eventFieldToCell_ 序列化，
+ * 含防公式注入），Members 的欄位也不與 JSON_EVENT_FIELDS 重疊，所以直接共用。
+ * rowNumber 傳 0 就 append 到最後一列。
+ */
+function writeMemberRow_(sheet, rowNumber, member) {
+  writeEvent_(sheet, rowNumber, member);
+}
+
+function findMemberRow_(sheet, userId) {
+  const map = getHeaderMap_(sheet);
+  if (!map.userId || sheet.getLastRow() < 2) return null;
+  const match = sheet.getRange(2, map.userId, sheet.getLastRow() - 1, 1)
+    .createTextFinder(String(userId))
+    .matchEntireCell(true)
+    .findNext();
+  if (!match) return null;
+
+  const rowNumber = match.getRow();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  const row = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+  return { rowNumber: rowNumber, member: rowToMember_(headers, row) };
 }
 
 /**
