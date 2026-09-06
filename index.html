@@ -242,9 +242,9 @@
     .nav-filters {
       display: flex;
       gap: 8px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       overflow-x: auto;
-      padding-bottom: 4px;
+      padding-bottom: 2px;
       align-items: center;
     }
 
@@ -293,27 +293,6 @@
       background: #0f172a;
     }
 
-    .refresh-btn {
-      flex: 0 0 auto;
-      min-height: 30px;
-      padding: 5px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 20px;
-      background: #ffffff;
-      color: #334155;
-      font-family: var(--font-line);
-      font-size: 13px;
-      font-weight: 700;
-      white-space: nowrap;
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    }
-
-    .refresh-btn:disabled {
-      color: #64748b;
-      background: #f1f5f9;
-      cursor: wait;
-    }
 
     /* LINE Event Cards (3-Tier Collapsible Card System) */
     .event-card {
@@ -645,6 +624,63 @@
     }
 
     /* Floating Action Button (FAB) Group (宣傳 & 揪團) */
+    /* 篩選列的四顆入口：等寬填滿整列。
+       淺色底 + 飽和文字，沿用專案既有的 .btn-edit / .btn-calendar / .btn-delete 配色慣例，
+       在藍色頁面底上比純白按鈕更容易分辨，也不會像實心色塊那樣搶掉卡片的注意力。 */
+    .nav-action {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font-line);
+      font-size: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+      transition: transform 0.15s, background 0.2s, color 0.2s;
+    }
+
+    .nav-action:active {
+      transform: scale(0.96);
+    }
+
+    .nav-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #btn-toggle-sort-panel {
+      background: #f1f5f9;
+      color: #334155;
+    }
+
+    #btn-toggle-sort-panel.active {
+      background: #334155;
+      color: #ffffff;
+    }
+
+    #btn-open-checkin {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+
+    #btn-broadcast-all {
+      background: #fff7ed;
+      color: #ea580c;
+    }
+
+    #btn-open-calendar {
+      background: #f5f3ff;
+      color: #7c3aed;
+    }
+
     .sort-toggle::after {
       content: "\25BE";
       margin-left: 5px;
@@ -655,11 +691,6 @@
 
     .sort-toggle[aria-expanded="true"]::after {
       transform: rotate(180deg);
-    }
-
-    /* 宣傳與日曆靠右，與排序分開 */
-    #btn-broadcast-all {
-      margin-left: auto;
     }
 
     .sort-panel {
@@ -758,15 +789,6 @@
       background: #f1f5f9;
     }
 
-    .fab-checkin {
-      background: #2563eb;
-      color: #ffffff;
-      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
-    }
-
-    .fab-checkin:hover {
-      background: #1d4ed8;
-    }
 
     .fab-btn:disabled {
       opacity: 0.5;
@@ -1668,7 +1690,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-09-06T20:06:33+08:00">v260906.2006</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-09-06T20:22:58+08:00">v260906.2022</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1691,10 +1713,11 @@
 
     <!-- Navigation: 排序面板開關 + 次要入口 -->
     <nav class="nav-filters">
-      <button id="btn-toggle-sort-panel" class="tab-btn sort-toggle" type="button"
-              aria-expanded="false" aria-controls="sort-panel">排序</button>
-      <button id="btn-broadcast-all" class="refresh-btn" type="button">宣傳</button>
-      <button id="btn-open-calendar" class="refresh-btn" type="button">日曆</button>
+      <button id="btn-toggle-sort-panel" class="nav-action sort-toggle" type="button"
+              aria-expanded="false" aria-controls="sort-panel"><span>排序</span></button>
+      <button id="btn-open-checkin" class="nav-action" type="button"><span>打卡</span></button>
+      <button id="btn-broadcast-all" class="nav-action" type="button"><span>宣傳</span></button>
+      <button id="btn-open-calendar" class="nav-action" type="button"><span>日曆</span></button>
     </nav>
 
     <!-- 排序與篩選面板（點「排序」展開） -->
@@ -1728,9 +1751,6 @@
 
   <!-- Floating Action Buttons Group (日曆 & 宣傳 & 揪團) -->
   <div class="fab-group">
-    <button id="btn-open-checkin" class="fab-btn fab-checkin" type="button">
-      <span>打卡</span>
-    </button>
     <button id="fab-add-event" class="fab-btn fab-add">
       <span>揪團</span>
     </button>
@@ -2155,7 +2175,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260906.2006", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260906.2022", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -3761,9 +3781,9 @@
       if (!fab) return;
       const ready = membersSupported || isDevMode;
       fab.disabled = !ready;
-      fab.title = ready ? "" : "雲端尚未完成打卡功能初始化";
-      const label = fab.querySelector("span");
-      if (label) label.innerText = ready ? "打卡" : "打卡（需更新）";
+      // 四顆按鈕等寬，文字不能變長，否則整列會被擠壞。
+      // 未就緒的訊息靠 disabled 外觀與 title 傳達。
+      fab.title = ready ? "" : "雲端尚未完成打卡功能初始化，請管理員執行「初始化／修復表格」";
     }
 
     function renderCheckinSelf() {
