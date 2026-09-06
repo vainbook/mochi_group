@@ -546,6 +546,9 @@ function doPost(e) {
       case "checkIn":
         result = checkIn_(spreadsheet, auditSheet, payload);
         break;
+      case "cancelCheckIn":
+        result = cancelCheckIn_(spreadsheet, auditSheet, payload);
+        break;
       case "adminUncheckMember":
         result = adminUncheckMember_(spreadsheet, auditSheet, payload);
         break;
@@ -1027,6 +1030,31 @@ function checkIn_(spreadsheet, auditSheet, payload) {
   });
 
   return { member: member, isNewMember: isNewMember };
+}
+
+/**
+ * 成員取消自己的打卡。與 adminUncheckMember_ 的差別是它只認 actorUserId，
+ * 不接受目標 userId，所以不需要管理員密碼也不可能動到別人。
+ */
+function cancelCheckIn_(spreadsheet, auditSheet, payload) {
+  const membersSheet = getMembersSheetForRequest_(spreadsheet);
+  const actorUserId = requireText_(payload.actorUserId, "尚未取得 LINE 身分，請重新登入後再試。");
+
+  const found = findMemberRow_(membersSheet, actorUserId);
+  if (!found) throw new Error("名單中找不到你的紀錄，可能已被管理員移除。");
+
+  const member = found.member;
+  member.checkedInAt = "";
+  writeMemberRow_(membersSheet, found.rowNumber, member);
+
+  appendAudit_(auditSheet, payload, {
+    eventId: "",
+    actionType: "checkin_cancel",
+    action: (member.displayName || actorUserId) + " 取消自己的打卡",
+    details: { userId: actorUserId }
+  });
+
+  return { member: member };
 }
 
 /**

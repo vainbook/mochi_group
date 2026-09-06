@@ -99,7 +99,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | `timestamp` | 伺服器紀錄時間 |
 | `actorUserId` | 操作者 LINE userId |
 | `actorName` | 操作者名稱 |
-| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`highlight`、`unhighlight`、`admin_remove_attendee`、`checkin`、`admin_uncheck`、`admin_remove_member`、`admin_reset_checkins` |
+| `actionType` | `create`、`join`、`leave`、`update`、`handoff`、`delete`、`comment`、`highlight`、`unhighlight`、`admin_remove_attendee`、`checkin`、`checkin_cancel`、`admin_uncheck`、`admin_remove_member`、`admin_reset_checkins` |
 | `action` | 可閱讀的操作說明 |
 | `details` | 補充 JSON 資料 |
 
@@ -120,6 +120,7 @@ Google Maps 分享網址會由 GAS 限定在 Google Maps 網域內解析，取�
 | action | 權限 | 行為 |
 |---|---|---|
 | `checkIn` | 任何已登入成員 | 名單裡沒有就新增一列（同時寫 `joinedAt` 與 `checkedInAt`），已有就只更新 `checkedInAt` 與顯示名稱 |
+| `cancelCheckIn` | 任何已登入成員 | 清空**自己**的 `checkedInAt`。只認 `actorUserId`，不接受目標 userId，所以動不到別人 |
 | `adminUncheckMember` | 僅管理員 | 清空該成員的 `checkedInAt`，人留在名單上 |
 | `adminRemoveMember` | 僅管理員 | 整列硬刪除 |
 | `adminResetCheckIns` | 僅管理員 | 一次清空整欄 `checkedInAt` |

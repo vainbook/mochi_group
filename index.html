@@ -295,7 +295,6 @@
 
     .refresh-btn {
       flex: 0 0 auto;
-      margin-left: auto;
       min-height: 30px;
       padding: 5px 12px;
       border: 1px solid #d1d5db;
@@ -646,6 +645,56 @@
     }
 
     /* Floating Action Button (FAB) Group (宣傳 & 揪團) */
+    .sort-toggle::after {
+      content: "\25BE";
+      margin-left: 5px;
+      font-size: 11px;
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+
+    .sort-toggle[aria-expanded="true"]::after {
+      transform: rotate(180deg);
+    }
+
+    /* 宣傳與日曆靠右，與排序分開 */
+    #btn-broadcast-all {
+      margin-left: auto;
+    }
+
+    .sort-panel {
+      background: var(--line-card-bg);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    }
+
+    .sort-panel-group {
+      margin-bottom: 10px;
+    }
+
+    .sort-panel-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--line-text-sub);
+      margin-bottom: 6px;
+    }
+
+    .sort-panel-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* 面板內的 pill 底色較淺，需要比 .nav-filters 上的深一點才看得清楚 */
+    .sort-panel .tab-btn:not(.active) {
+      background: #f1f5f9;
+      color: #64748b;
+      opacity: 1;
+    }
+
     .fab-group {
       position: fixed;
       bottom: max(20px, env(safe-area-inset-bottom));
@@ -787,36 +836,44 @@
 
     .checkin-tools {
       display: flex;
-      flex-wrap: wrap;
       gap: 8px;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
-    .checkin-tools .line-input {
+    /* .line-input 本身是 width:100%，放進 flex 列要明確指定伸縮，
+       否則搜尋框會被排序選單擠成一條、選單自己溢出容器。 */
+    #checkin-search {
+      flex: 1 1 auto;
+      min-width: 0;
       height: 44px;
     }
 
     .checkin-filters {
       display: flex;
       gap: 8px;
-      flex: 1;
-      min-width: 0;
+      margin-bottom: 10px;
     }
 
-    .checkin-sort {
+    /* 用 ID 選擇器才蓋得過後面定義的 .line-input { width: 100% }。 */
+    #checkin-sort {
+      flex: 0 0 auto;
       width: auto;
-      flex-shrink: 0;
+      max-width: 45%;
       height: 44px;
-      padding: 8px 10px;
+      padding: 8px 28px 8px 10px;
       font-size: 14px;
+    }
+
+    #modal-checkin .modal-form-body {
+      padding-bottom: 18px;
     }
 
     .checkin-list {
       border: 1px solid var(--line-border);
       border-radius: 10px;
       background: #ffffff;
-      max-height: 46vh;
+      max-height: 42vh;
       overflow-y: auto;
     }
 
@@ -888,15 +945,6 @@
       color: var(--line-text-sub);
     }
 
-    .checkin-admin-zone {
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px dashed #cbd5e1;
-    }
-
-    .checkin-admin-zone .form-help {
-      margin-bottom: 8px;
-    }
 
     /* 活動日曆檢視 */
     .calendar-hint {
@@ -1620,7 +1668,7 @@
       <div class="header-top">
         <h1 class="brand-title">
           <span>群組活動布告欄</span>
-          <time id="app-version-badge" class="version-label" datetime="2026-09-06T15:41:38+08:00">v260906.1541</time>
+          <time id="app-version-badge" class="version-label" datetime="2026-09-06T20:06:33+08:00">v260906.2006</time>
         </h1>
         <span id="login-badge" class="sync-status-badge">同步中...</span>
       </div>
@@ -1641,13 +1689,35 @@
       <span id="sync-clock-text">正在連線雲端同步最新活動...</span>
     </div>
 
-    <!-- Navigation Pill Tabs -->
+    <!-- Navigation: 排序面板開關 + 次要入口 -->
     <nav class="nav-filters">
-      <button class="tab-btn active" data-filter="open" aria-pressed="true">揪團中</button>
-      <button class="tab-btn active" data-filter="fixed" aria-pressed="true">固定團</button>
-      <button class="tab-btn active" data-filter="wish" aria-pressed="true">許願團</button>
-      <button id="btn-refresh-data" class="refresh-btn" type="button">重新整理</button>
+      <button id="btn-toggle-sort-panel" class="tab-btn sort-toggle" type="button"
+              aria-expanded="false" aria-controls="sort-panel">排序</button>
+      <button id="btn-broadcast-all" class="refresh-btn" type="button">宣傳</button>
+      <button id="btn-open-calendar" class="refresh-btn" type="button">日曆</button>
     </nav>
+
+    <!-- 排序與篩選面板（點「排序」展開） -->
+    <div id="sort-panel" class="sort-panel" hidden>
+      <div class="sort-panel-group">
+        <span class="sort-panel-label">活動時間</span>
+        <div class="sort-panel-pills">
+          <button type="button" class="tab-btn active" data-event-sort="near-first" aria-pressed="true">由近到遠</button>
+          <button type="button" class="tab-btn" data-event-sort="far-first" aria-pressed="false">由遠到近</button>
+        </div>
+      </div>
+
+      <div class="sort-panel-group">
+        <span class="sort-panel-label">顯示分類</span>
+        <div class="sort-panel-pills">
+          <button type="button" class="tab-btn active" data-filter="open" aria-pressed="true">揪團中</button>
+          <button type="button" class="tab-btn active" data-filter="fixed" aria-pressed="true">固定團</button>
+          <button type="button" class="tab-btn active" data-filter="wish" aria-pressed="true">許願團</button>
+        </div>
+      </div>
+
+      <button id="btn-refresh-data" class="line-btn btn-detail" type="button" style="width:100%;">重新整理</button>
+    </div>
 
     <!-- Event Cards Container -->
     <main id="event-list">
@@ -1660,12 +1730,6 @@
   <div class="fab-group">
     <button id="btn-open-checkin" class="fab-btn fab-checkin" type="button">
       <span>打卡</span>
-    </button>
-    <button id="btn-open-calendar" class="fab-btn fab-calendar" type="button">
-      <span>日曆</span>
-    </button>
-    <button id="btn-broadcast-all" class="fab-btn fab-broadcast">
-      <span>宣傳</span>
     </button>
     <button id="fab-add-event" class="fab-btn fab-add">
       <span>揪團</span>
@@ -1693,12 +1757,7 @@
 
         <div class="checkin-tools">
           <input id="checkin-search" class="line-input" type="search" placeholder="搜尋名字" aria-label="搜尋成員名字" autocomplete="off">
-          <div class="checkin-filters">
-            <button type="button" class="tab-btn active" data-checkin-filter="all" aria-pressed="true">全部</button>
-            <button type="button" class="tab-btn" data-checkin-filter="done" aria-pressed="false">已打卡</button>
-            <button type="button" class="tab-btn" data-checkin-filter="pending" aria-pressed="false">未打卡</button>
-          </div>
-          <select id="checkin-sort" class="line-input checkin-sort" aria-label="名單排序方式">
+          <select id="checkin-sort" class="line-input" aria-label="名單排序方式">
             <option value="name-asc">名稱 A→Z</option>
             <option value="name-desc">名稱 Z→A</option>
             <option value="pending-first">未打卡優先</option>
@@ -1706,12 +1765,22 @@
           </select>
         </div>
 
-        <div id="checkin-list" class="checkin-list"></div>
-
-        <div id="checkin-admin-zone" class="checkin-admin-zone" style="display:none;">
-          <p class="form-help">重置後所有人都會變回未打卡，需要重新打卡一次。名單本身不會被刪除。</p>
-          <button id="btn-reset-checkins" class="line-btn btn-delete" type="button" style="width:100%;">重置全部人打卡</button>
+        <div class="checkin-filters">
+          <button type="button" class="tab-btn active" data-checkin-filter="all" aria-pressed="true">全部</button>
+          <button type="button" class="tab-btn" data-checkin-filter="done" aria-pressed="false">已打卡</button>
+          <button type="button" class="tab-btn" data-checkin-filter="pending" aria-pressed="false">未打卡</button>
         </div>
+
+        <div id="checkin-list" class="checkin-list"></div>
+      </div>
+
+      <div class="modal-footer" style="display:flex; gap:10px;">
+        <button id="btn-reset-checkins" class="line-btn btn-delete" type="button" style="flex:1; display:none;">
+          重置全部打卡
+        </button>
+        <button class="line-btn btn-detail" style="flex:1;" data-close="modal-checkin">
+          關閉視窗
+        </button>
       </div>
     </div>
   </div>
@@ -2086,7 +2155,7 @@
 
     // --- 1. CONFIG & STATE ---
     const CONFIG = {
-      APP_VERSION: "v260906.1541", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
+      APP_VERSION: "v260906.2006", // 格式: vYYMMDD.HHMM (根據當下時間戳記更新)
       LIFF_ID: "2010984505-Nv6CpgYO",
       LIFF_URL: "https://liff.line.me/2010984505-Nv6CpgYO",
       GAS_API_URL: "https://script.google.com/macros/s/AKfycbwIMCqBv01Oyu5idmPBTv5QNYNbu2msqw8LYjmesxwRjeKaBwSp_XVUL28PDgjg6Rlzkw/exec",
@@ -2138,8 +2207,10 @@
     let checkinSort = "name-asc";
     let checkinRequestInFlight = false;
 
-    // 三個分類各自可獨立開關，預設全開。
+    // 三個分類各自可獨立開關，預設全開。搬進排序面板後仍然是獨立開關，不是分頁。
     const activeFilters = new Set(["open", "fixed", "wish"]);
+    // 活動時間排序方向。near-first = 快要發生的排前面（預設，也是舊行為）。
+    let eventSortOrder = "near-first";
     let activeEventId = null;
     let remoteFetchInFlight = null;
     let versionCheckInFlight = null;
@@ -3717,7 +3788,7 @@
       const myRecord = getMyMemberRecord();
       const checkedIn = isMemberCheckedIn(myRecord);
       if (checkinRequestInFlight) {
-        statusEl.innerText = "正在送出打卡...";
+        statusEl.innerText = "正在送出...";
         buttonEl.innerText = "處理中";
         buttonEl.disabled = true;
         return;
@@ -3726,11 +3797,15 @@
       if (checkedIn) {
         const timeText = formatCheckinTime(myRecord.checkedInAt);
         statusEl.innerText = timeText ? `已打卡 ${timeText}` : "已打卡";
-        buttonEl.innerText = "已完成打卡";
-        buttonEl.disabled = true;
+        buttonEl.innerText = "取消打卡";
+        buttonEl.classList.remove("btn-join");
+        buttonEl.classList.add("btn-cancel");
+        buttonEl.disabled = false;
       } else {
         statusEl.innerText = myRecord ? "本輪尚未打卡" : "尚未加入名單，打卡後自動加入";
         buttonEl.innerText = "打卡";
+        buttonEl.classList.remove("btn-cancel");
+        buttonEl.classList.add("btn-join");
         buttonEl.disabled = false;
       }
     }
@@ -3764,12 +3839,11 @@
 
       const summaryEl = document.getElementById("checkin-summary");
       const listEl = document.getElementById("checkin-list");
-      const adminZoneEl = document.getElementById("checkin-admin-zone");
       if (!summaryEl || !listEl) return;
 
-      if (adminZoneEl) {
-        adminZoneEl.style.display = currentUserCanDeleteAnyEvent ? "block" : "none";
-      }
+      // 重置鈕在 footer，與活動視窗的「刪除活動」同一個位置與作法。
+      const resetBtn = document.getElementById("btn-reset-checkins");
+      if (resetBtn) resetBtn.style.display = currentUserCanDeleteAnyEvent ? "flex" : "none";
 
       const total = membersData.length;
       const doneCount = membersData.filter(isMemberCheckedIn).length;
@@ -3858,27 +3932,36 @@
       if (checkinRequestInFlight) return;
       if (!ensureLoggedIn()) return;
 
+      // 同一顆按鈕切換：已打卡就是取消，未打卡就是打卡。
+      // 取消只送 actorUserId，後端不接受目標 userId，所以動不到別人。
+      const wasCheckedIn = isMemberCheckedIn(getMyMemberRecord());
+      const actionName = wasCheckedIn ? "取消打卡" : "打卡";
+
       checkinRequestInFlight = true;
       renderCheckinSelf();
 
       try {
-        const result = await sendPostToGAS({
-          action: "checkIn",
-          pictureUrl: currentUser?.pictureUrl || ""
-        });
+        const result = await sendPostToGAS(wasCheckedIn
+          ? { action: "cancelCheckIn" }
+          : { action: "checkIn", pictureUrl: currentUser?.pictureUrl || "" });
 
         if (!result.ok) {
-          alert(`打卡失敗。\n\n${result.message}`);
+          alert(`${actionName}失敗。\n\n${result.message}`);
           return;
         }
         if (result.pending) {
-          showToast(result.persisted ? "打卡已保留，雲端會自動確認" : "打卡結果待確認，請稍後重新整理");
+          showToast(result.persisted ? `${actionName}已保留，雲端會自動確認` : "結果待確認，請稍後重新整理");
           return;
         }
 
-        // sendPostToGAS 不回傳 response body，所以本機自己補上這一筆。
-        applyLocalCheckIn();
-        showToast("打卡完成");
+        // sendPostToGAS 不回傳 response body，所以本機自己更新這一筆。
+        if (wasCheckedIn) {
+          const mine = getMyMemberRecord();
+          if (mine) mine.checkedInAt = "";
+        } else {
+          applyLocalCheckIn();
+        }
+        showToast(wasCheckedIn ? "已取消打卡" : "打卡完成");
       } finally {
         checkinRequestInFlight = false;
         renderCheckinList();
@@ -3998,7 +4081,9 @@
         .sort((a, b) => {
           if (isFixedGroup(a) !== isFixedGroup(b)) return isFixedGroup(a) ? -1 : 1;
           if (isFixedGroup(a)) return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
-          return parseSafeDate(a.datetime) - parseSafeDate(b.datetime);
+          // 固定團沒有日期，永遠釘在最上面；方向只套用在有日期的活動。
+          const direction = eventSortOrder === "far-first" ? -1 : 1;
+          return direction * (parseSafeDate(a.datetime) - parseSafeDate(b.datetime));
         });
       
       // 三個分類是獨立開關，顯示所有被開啟分類的聯集。
@@ -5111,7 +5196,9 @@ ${getShareableUrl()}`;
 
       // 限定在主畫面的篩選列。打卡視窗裡也用 .tab-btn 樣式，
       // 沒有這個 .nav-filters 前綴會把 modal 那三顆也綁上活動篩選邏輯。
-      document.querySelectorAll(".nav-filters .tab-btn").forEach(btn => {
+      // 分類篩選：三顆各自獨立開關（不是分頁），現在住在排序面板裡。
+      // 一律用 [data-filter] 選取，不要用 .tab-btn —— 打卡視窗與排序區都在用同一個樣式。
+      document.querySelectorAll("[data-filter]").forEach(btn => {
         btn.onclick = () => {
           const key = btn.getAttribute("data-filter");
           const nowActive = !activeFilters.has(key);
@@ -5122,6 +5209,28 @@ ${getShareableUrl()}`;
           renderEvents();
         };
       });
+
+      // 活動時間排序：兩顆單選互斥。
+      document.querySelectorAll("[data-event-sort]").forEach(btn => {
+        btn.onclick = () => {
+          eventSortOrder = btn.getAttribute("data-event-sort") || "near-first";
+          document.querySelectorAll("[data-event-sort]").forEach(other => {
+            const isActive = other === btn;
+            other.classList.toggle("active", isActive);
+            other.setAttribute("aria-pressed", String(isActive));
+          });
+          renderEvents();
+        };
+      });
+
+      const sortToggle = document.getElementById("btn-toggle-sort-panel");
+      const sortPanel = document.getElementById("sort-panel");
+      sortToggle.onclick = () => {
+        const willOpen = sortPanel.hidden;
+        sortPanel.hidden = !willOpen;
+        sortToggle.setAttribute("aria-expanded", String(willOpen));
+        sortToggle.classList.toggle("active", willOpen);
+      };
     }
 
     function escapeHtml(str) {
